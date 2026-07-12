@@ -18,20 +18,21 @@ end-to-end зрізом (стан зберігається/завантажує�
 - ✅ GitHub Actions CI: lint → format check → typecheck → test (+coverage) → build → econ-sim.
 - ✅ `CLAUDE.md` з архітектурними правилами проєкту.
 - ✅ Документи: `GAME-DESIGN.md`, `ARCHITECTURE.md`, цей `ROADMAP.md`, мапа курсу.
-- 🔶 `core/rng.ts` — seeded PRNG (sfc32) + тести.
-- 🔶 `core/save/` — схема сейву v1, серіалізація, реєстр міграцій + тести.
-- 🔶 `store/` — власний store (getState/dispatch/subscribe) + event bus + тести.
-- 🔶 `platform/` — інтерфейс `PlatformAdapter` + `LocalAdapter` (localStorage) + тест.
-- 🔶 App shell — `index.html` + `main.ts`, мінімальний DOM-екран у стилі «Ґримуар»
+- ✅ `core/rng.ts` — seeded PRNG (sfc32) + тести (20 тестів).
+- ✅ `core/save/` — схема сейву v1, серіалізація, реєстр міграцій + тести (10 тестів).
+- ✅ `store/` — власний store (getState/dispatch/subscribe) + event bus + тести (30 тестів).
+- ✅ `platform/` — інтерфейс `PlatformAdapter` + `LocalAdapter` (localStorage) + тести (6 тестів).
+- ✅ App shell — `index.html` + `main.ts`, мінімальний DOM-екран у стилі «Ґримуар»
   (CSS-змінні палітри, кнопка Save, індикатор стану).
-- 🔶 Уроки курсу, модулі 0–2 (`docs/course/01`–`03`).
+- ✅ Уроки курсу, модулі 0–2 (`docs/course/01`–`03`).
 
 **Definition of Done:** гра відкривається (`npm run dev`), зберігає і відновлює стан
 через localStorage, `npm run lint && npm run typecheck && npm run test && npm run build`
-проходять без помилок, CI зелений.
+проходять без помилок (66/66 тестів), CI зелений. **Досягнуто.**
 
-**Бюджет білда на цьому етапі:** не вимірюється (немає Pixi/асетів) — контрольна точка
-з Етапу 1.
+**Бюджет білда на цьому етапі:** не вимірюється як вимога (немає Pixi/асетів) — контрольна
+точка з Етапу 1. Фактична збірка Stage 0: ~58 КБ JS + ~2 КБ CSS (гзіп ~15 КБ) — з великим
+запасом під бюджет 5 МБ.
 
 ---
 
