@@ -1,0 +1,29 @@
+/*
+ * Styles colocated with app-shell.ts — the pattern components follow from here on: each
+ * component owns its own CSS file and imports it, instead of one growing global stylesheet.
+ * Design tokens (colors, fonts, spacing) still come from styles/grimoire.css.
+ */
+
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  text-align: center;
+  background: var(--color-bg-raised);
+  border: var(--border-subtle);
+  border-radius: var(--radius);
+  padding: var(--space-5);
+  min-width: 320px;
+}
+
+.app-shell__actions {
+  display: flex;
+  gap: var(--space-3);
+}
+
+.app-shell__status {
+  color: var(--color-ink-dim);
+  font-style: italic;
+  min-height: 1.5em;
+}

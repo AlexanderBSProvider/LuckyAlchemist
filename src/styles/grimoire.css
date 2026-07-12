@@ -1,0 +1,96 @@
+/*
+ * "Ґримуар" style system — see docs/GAME-DESIGN.md §8.
+ * Dark tone, engraving-style contrast, restrained glow. Every color/spacing/font value
+ * used anywhere in the UI should reference one of these custom properties, not a literal —
+ * that is what keeps the whole game visually consistent as more screens are added.
+ */
+
+:root {
+  /* Palette */
+  --color-bg: #100d0a;
+  --color-bg-raised: #1a1510;
+  --color-gold: #c9a227;
+  --color-emerald: #3fa372;
+  --color-purple: #6e4b8e;
+  --color-ink: #f2e9d8;
+  --color-ink-dim: #a89a82;
+  --color-danger: #a3402f;
+
+  /* Typography */
+  --font-display: "IM Fell English SC", serif;
+  --font-body: "EB Garamond", serif;
+
+  /* Spacing scale */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 1rem;
+  --space-4: 1.5rem;
+  --space-5: 2.5rem;
+
+  /* Effects */
+  --radius: 4px;
+  --glow-gold: 0 0 12px rgba(201, 162, 39, 0.35);
+  --border-subtle: 1px solid rgba(201, 162, 39, 0.25);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: var(--color-bg);
+  color: var(--color-ink);
+  font-family: var(--font-body);
+}
+
+#app {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-5);
+  gap: var(--space-4);
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-display);
+  letter-spacing: 0.03em;
+  color: var(--color-gold);
+  text-shadow: var(--glow-gold);
+  margin: 0;
+}
+
+button {
+  font-family: var(--font-body);
+  font-size: 1rem;
+  color: var(--color-ink);
+  background: var(--color-bg-raised);
+  border: var(--border-subtle);
+  border-radius: var(--radius);
+  padding: var(--space-2) var(--space-4);
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+button:hover {
+  background: #241d15;
+  box-shadow: var(--glow-gold);
+}
+
+button:active {
+  transform: translateY(1px);
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  box-shadow: none;
+}
