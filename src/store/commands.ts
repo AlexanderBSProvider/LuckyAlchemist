@@ -104,7 +104,7 @@ export function fightStage(rng: Rng, stage: Stage, playerPower: number): Command
   };
 }
 
-interface BrewData {
+export interface BrewData {
   readonly rings: RingWeights;
   readonly symbols: readonly BrewSymbol[];
   readonly ingredients: readonly Ingredient[];

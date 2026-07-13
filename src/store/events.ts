@@ -1,3 +1,5 @@
+import type { GradeId, RarityTier } from "../data/schemas";
+
 /**
  * Domain events — "something just happened" (`save:written`), as opposed to store state
  * which is "what the situation is right now" (`resources.gold`). UI, render, and audio
@@ -6,6 +8,8 @@
  *
  * `GameEventMap` grows as features land — Stage 1 adds `brew:success`, `distill:burst`,
  * etc. Stage 0 only has the persistence lifecycle events, wired up by `persistence.ts`.
+ * Payloads stay minimal — just enough for a listener to decide what to animate/play, not
+ * a copy of state (state is already reachable via `store.getState()`).
  */
 // A `type` alias, not an `interface`: only object type literals (and type aliases to
 // them) get an implicit index signature when checked against a `Record<string, unknown>`
@@ -16,6 +20,17 @@ export type GameEventMap = {
   "save:written": { at: number };
   "save:loaded": { at: number };
   "save:load-failed": { reason: string };
+  "brew:success": { potionId: string; symbolId: string; rarity: RarityTier; triple: boolean };
+  "brew:fail": undefined;
+  "distill:advance": { potionId: string; grade: GradeId };
+  "distill:burst": { potionId: string };
+  "battle:won": {
+    stageId: number;
+    rewardGold: number;
+    rewardIngredientId: string;
+    rewardIngredientAmount: number;
+  };
+  "battle:lost": { stageId: number };
 };
 
 export interface EventBus<EventMap extends Record<string, unknown>> {
