@@ -27,6 +27,14 @@
   --space-4: 1.5rem;
   --space-5: 2.5rem;
 
+  /* Rarity tiers (potion glow language, GAME-DESIGN §8: vial × rarity color × stamp) */
+  --rarity-common: #a89a82;
+  --rarity-uncommon: #3fa372;
+  --rarity-rare: #4f7ea8;
+  --rarity-epic: #8a5fb5;
+  --rarity-legendary: #c9a227;
+  --rarity-quintessence: #f2e9d8;
+
   /* Effects */
   --radius: 4px;
   --glow-gold: 0 0 12px rgba(201, 162, 39, 0.35);
@@ -44,16 +52,29 @@ body {
   background: var(--color-bg);
   color: var(--color-ink);
   font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.5;
 }
 
+/* Subtle vignette so the lab feels lit by a single candle, not a flat void. */
+body {
+  background-image: radial-gradient(
+    ellipse at 50% 20%,
+    rgba(201, 162, 39, 0.04),
+    transparent 60%
+  );
+}
+
+/* Portrait game frame (mobile-first, web-portal format): one centered column. */
 #app {
   min-height: 100%;
+  width: 100%;
+  max-width: 560px;
+  margin: 0 auto;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: var(--space-5);
-  gap: var(--space-4);
+  padding: var(--space-2) var(--space-3) var(--space-5);
+  gap: var(--space-3);
 }
 
 h1,
@@ -93,4 +114,26 @@ button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
   box-shadow: none;
+}
+
+/* Compact variant for buttons inside list rows (potion shelf, upgrade shop). */
+button.btn-small {
+  font-size: 0.85rem;
+  padding: var(--space-1) var(--space-2);
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-gold);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

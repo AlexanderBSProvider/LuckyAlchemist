@@ -6,24 +6,27 @@
 
 .app-shell {
   display: flex;
-  flex-direction: column;
-  align-items: center;
+  align-items: baseline;
+  justify-content: space-between;
   gap: var(--space-3);
-  text-align: center;
-  background: var(--color-bg-raised);
-  border: var(--border-subtle);
-  border-radius: var(--radius);
-  padding: var(--space-5);
-  min-width: 320px;
+  flex-wrap: wrap;
+  padding: var(--space-3) 0;
+  border-bottom: var(--border-subtle);
 }
 
-.app-shell__actions {
+.app-shell__title {
+  font-size: 1.75rem;
+}
+
+.app-shell__side {
   display: flex;
+  align-items: baseline;
   gap: var(--space-3);
 }
 
 .app-shell__status {
   color: var(--color-ink-dim);
   font-style: italic;
+  margin: 0;
   min-height: 1.5em;
 }

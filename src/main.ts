@@ -1,11 +1,13 @@
 import "./styles/grimoire.css";
 import { createInitialSave } from "./core/save";
+import { createRng } from "./core/rng";
 import { createLocalAdapter } from "./platform/local";
 import { createEventBus } from "./store/events";
 import type { GameEventMap } from "./store/events";
 import { loadGame } from "./store/persistence";
 import { createStore } from "./store/store";
 import { mountAppShell } from "./ui/app-shell";
+import { mountLabPanel } from "./ui/lab-panel";
 
 /**
  * Composition root: the one place allowed to import from every layer (core, store,
@@ -28,6 +30,17 @@ async function bootstrap(): Promise<void> {
   }
 
   mountAppShell(container, { store, events, io: platform, now });
+
+  // Forked *after* loadGame so a restored save's seed drives these streams, not a
+  // throwaway seed from the pre-load initial state.
+  const rootRng = createRng(store.getState().seed);
+  mountLabPanel(container, {
+    store,
+    battleRng: rootRng.fork("battle"),
+    siftRng: rootRng.fork("sift"),
+    brewRng: rootRng.fork("brew"),
+    distillRng: rootRng.fork("distill"),
+  });
 
   platform.gameplayStart();
 }

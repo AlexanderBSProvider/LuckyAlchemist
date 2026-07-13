@@ -1,5 +1,4 @@
 import "./app-shell.css";
-import { incrementGoldStub } from "../store/commands";
 import type { GameEventMap } from "../store/events";
 import type { EventBus } from "../store/events";
 import type { GameState } from "../store/game-state";
@@ -15,35 +14,27 @@ export interface AppShellDeps {
 }
 
 /**
- * Stage 0's only screen: an "empty laboratory" that proves the store, event bus, and
- * platform adapter are wired together correctly. Follows the plain-function DOM component
- * pattern used throughout `ui/` (see docs/course, module 3, once Stage 1 grows this out):
- * a function takes a container and dependencies, builds DOM nodes, subscribes to the
- * store/event bus, and returns a cleanup function that undoes every subscription.
+ * The grimoire header bar: game title, manual save, and save-status line. Follows the
+ * plain-function DOM component pattern used throughout `ui/`: a function takes a container
+ * and dependencies, builds DOM nodes, subscribes to the event bus, and returns a cleanup
+ * function that undoes every subscription. Stage 0's "+1 gold" stub button is gone —
+ * resources now come from the real loop rendered by lab-panel.
  */
 export function mountAppShell(container: HTMLElement, deps: AppShellDeps): () => void {
   const { store, events, io, now } = deps;
 
-  const root = document.createElement("main");
+  const root = document.createElement("header");
   root.className = "app-shell";
 
   const title = document.createElement("h1");
+  title.className = "app-shell__title";
   title.textContent = "Lucky Alchemist";
 
-  const subtitle = document.createElement("p");
-  subtitle.textContent = "Порожня лабораторія — Етап 0";
+  const side = document.createElement("div");
+  side.className = "app-shell__side";
 
-  const goldDisplay = document.createElement("p");
-
-  const actions = document.createElement("div");
-  actions.className = "app-shell__actions";
-
-  const incrementButton = document.createElement("button");
-  incrementButton.type = "button";
-  incrementButton.textContent = "+1 золото (заглушка)";
-  incrementButton.addEventListener("click", () => {
-    store.dispatch(incrementGoldStub(1));
-  });
+  const statusLine = document.createElement("p");
+  statusLine.className = "app-shell__status";
 
   const saveButton = document.createElement("button");
   saveButton.type = "button";
@@ -52,19 +43,9 @@ export function mountAppShell(container: HTMLElement, deps: AppShellDeps): () =>
     void saveGame(store, io, events, now());
   });
 
-  const statusLine = document.createElement("p");
-  statusLine.className = "app-shell__status";
-
-  actions.append(incrementButton, saveButton);
-  root.append(title, subtitle, goldDisplay, actions, statusLine);
+  side.append(statusLine, saveButton);
+  root.append(title, side);
   container.append(root);
-
-  const renderGold = (gold: number): void => {
-    goldDisplay.textContent = `Золото: ${gold}`;
-  };
-  renderGold(store.getState().resources.gold);
-
-  const unsubscribeGold = store.subscribe((state) => state.resources.gold, renderGold);
 
   const unsubscribeSaved = events.on("save:written", ({ at }) => {
     statusLine.textContent = `Збережено о ${new Date(at).toLocaleTimeString("uk-UA")}`;
@@ -77,7 +58,6 @@ export function mountAppShell(container: HTMLElement, deps: AppShellDeps): () =>
   });
 
   return () => {
-    unsubscribeGold();
     unsubscribeSaved();
     unsubscribeLoaded();
     unsubscribeLoadFailed();

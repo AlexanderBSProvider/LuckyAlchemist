@@ -1,0 +1,772 @@
+/*
+ * Stage 1 game screen, "Grimoire" style: portrait layout — HUD, cauldron scene with the
+ * three symbol rings, tab bar, action panels with one big banner CTA each. All colors,
+ * spacing, and fonts come from the tokens in styles/grimoire.css.
+ */
+
+.lab-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  text-align: left;
+}
+
+/* Rarity color hook: every rarity-tinted element (rolls, tiles, slots, banner) reads
+ * `--rar`, set by one of these classes. */
+.rar-common {
+  --rar: var(--rarity-common);
+}
+.rar-uncommon {
+  --rar: var(--rarity-uncommon);
+}
+.rar-rare {
+  --rar: var(--rarity-rare);
+}
+.rar-epic {
+  --rar: var(--rarity-epic);
+}
+.rar-legendary {
+  --rar: var(--rarity-legendary);
+}
+.rar-quintessence {
+  --rar: var(--rarity-quintessence);
+}
+
+/* --- Resource HUD ------------------------------------------------------------------ */
+
+.hud {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.hud__res {
+  display: inline-block;
+  padding: var(--space-1) var(--space-3);
+  background: var(--color-bg-raised);
+  border: var(--border-subtle);
+  border-radius: 999px;
+  font-variant-numeric: tabular-nums;
+}
+
+.hud__res--gold {
+  color: var(--color-gold);
+}
+
+.hud__res--ash {
+  color: var(--color-ink-dim);
+}
+
+.pulse {
+  animation: res-pulse 0.5s ease-out;
+}
+
+@keyframes res-pulse {
+  0% {
+    transform: scale(1);
+  }
+  30% {
+    transform: scale(1.12);
+    filter: brightness(1.7);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* --- Cauldron scene ------------------------------------------------------------------ */
+
+.scene {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: var(--border-subtle);
+  border-radius: 10px;
+  background:
+    radial-gradient(ellipse at 50% 42%, rgba(63, 163, 114, 0.07), transparent 62%),
+    var(--color-bg-raised);
+  overflow: hidden;
+}
+
+.scene__rings {
+  position: relative;
+  width: min(300px, 74vw);
+  aspect-ratio: 1 / 1;
+}
+
+.scene--brewing .scene__rings {
+  /* 720° = whole turns, so `forwards` ends exactly where the idle spin left off. */
+  animation: rings-burst 1.15s cubic-bezier(0.22, 0.8, 0.3, 1) forwards;
+}
+
+@keyframes rings-burst {
+  to {
+    transform: rotate(720deg);
+  }
+}
+
+.ring {
+  position: absolute;
+  border: 1px solid rgba(201, 162, 39, 0.16);
+  border-radius: 50%;
+  animation: ring-spin var(--spin-dur, 80s) linear infinite;
+}
+
+@keyframes ring-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.ring--outer {
+  inset: 0;
+  --spin-dur: 95s;
+}
+
+.ring--mid {
+  inset: 15%;
+  --spin-dur: 70s;
+  animation-direction: reverse;
+}
+
+.ring--inner {
+  inset: 30%;
+  --spin-dur: 50s;
+}
+
+.ring__arm {
+  position: absolute;
+  inset: 0;
+  transform: rotate(var(--angle));
+}
+
+.ring__glyph {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 1.15rem;
+  color: var(--color-ink-dim);
+  text-shadow: 0 0 8px rgba(201, 162, 39, 0.3);
+  background: var(--color-bg-raised);
+  padding: 0 2px;
+}
+
+.ring--inner .ring__glyph {
+  font-size: 0.95rem;
+}
+
+.cauldron {
+  position: absolute;
+  inset: 40%;
+  border-radius: 50%;
+  border: 1px solid rgba(201, 162, 39, 0.35);
+  background: radial-gradient(circle at 50% 32%, rgba(63, 163, 114, 0.9), #14382a 72%);
+  overflow: hidden;
+  animation: liquid-glow 4s ease-in-out infinite alternate;
+}
+
+@keyframes liquid-glow {
+  from {
+    box-shadow:
+      0 0 10px rgba(63, 163, 114, 0.25),
+      inset 0 -6px 12px rgba(0, 0, 0, 0.5);
+  }
+  to {
+    box-shadow:
+      0 0 26px rgba(63, 163, 114, 0.55),
+      inset 0 -6px 12px rgba(0, 0, 0, 0.5);
+  }
+}
+
+.cauldron__bubble {
+  position: absolute;
+  bottom: 8%;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(242, 233, 216, 0.55);
+  animation: bubble-rise 3.4s ease-in infinite;
+}
+
+.cauldron__bubble:nth-child(1) {
+  left: 30%;
+}
+
+.cauldron__bubble:nth-child(2) {
+  left: 55%;
+  width: 4px;
+  height: 4px;
+  animation-delay: 1.2s;
+}
+
+.cauldron__bubble:nth-child(3) {
+  left: 68%;
+  width: 5px;
+  height: 5px;
+  animation-delay: 2.3s;
+}
+
+@keyframes bubble-rise {
+  0% {
+    transform: translateY(0);
+    opacity: 0;
+  }
+  15% {
+    opacity: 0.9;
+  }
+  100% {
+    transform: translateY(-48px);
+    opacity: 0;
+  }
+}
+
+/* --- Brew rolls + result banner ------------------------------------------------------ */
+
+.scene__rolls {
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+  min-height: 60px;
+}
+
+.roll {
+  width: 54px;
+  height: 54px;
+  display: grid;
+  place-items: center;
+  font-size: 1.6rem;
+  border-radius: 50%;
+  background: var(--color-bg);
+  border: 1px solid rgba(201, 162, 39, 0.3);
+  opacity: 0;
+  animation: roll-in 0.38s cubic-bezier(0.34, 1.5, 0.64, 1) forwards;
+}
+
+@keyframes roll-in {
+  from {
+    opacity: 0;
+    transform: scale(0.2);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.roll--hit {
+  color: var(--rar, var(--color-gold));
+  border-color: currentColor;
+  /* No color in the shadows = currentColor, i.e. the rarity tint. */
+  box-shadow: 0 0 14px;
+  text-shadow: 0 0 10px;
+}
+
+.roll--miss {
+  color: var(--color-ink-dim);
+  filter: grayscale(0.4) brightness(0.85);
+}
+
+.scene__banner {
+  min-height: 1.7em;
+  text-align: center;
+}
+
+.scene__banner-text {
+  margin: 0;
+  font-family: var(--font-display);
+  letter-spacing: 0.04em;
+  color: var(--rar, var(--color-ink));
+  text-shadow: 0 0 10px;
+  opacity: 0;
+  animation: banner-in 0.5s ease-out 2.25s forwards;
+}
+
+.scene__banner-text--fail {
+  color: var(--color-danger);
+}
+
+@keyframes banner-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* --- Tab bar ------------------------------------------------------------------------- */
+
+.tabs {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-1);
+  padding: var(--space-1);
+  background: var(--color-bg-raised);
+  border: var(--border-subtle);
+  border-radius: 10px;
+}
+
+.tabs__btn {
+  border: none;
+  background: transparent;
+  padding: var(--space-2) 0;
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+  color: var(--color-ink-dim);
+  border-radius: 8px;
+}
+
+.tabs__btn:hover {
+  background: rgba(201, 162, 39, 0.07);
+  box-shadow: none;
+}
+
+.tabs__btn--active {
+  background: rgba(201, 162, 39, 0.12);
+  color: var(--color-gold);
+  box-shadow: inset 0 0 0 1px rgba(201, 162, 39, 0.4);
+}
+
+/* --- Panels ---------------------------------------------------------------------------- */
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-bg-raised);
+  border: var(--border-subtle);
+  border-radius: 10px;
+}
+
+.panel[hidden] {
+  display: none;
+}
+
+.panel p {
+  margin: 0;
+}
+
+.panel__hint {
+  color: var(--color-ink-dim);
+  font-size: 0.9rem;
+  font-style: italic;
+}
+
+@keyframes win-flash {
+  0%,
+  100% {
+    box-shadow: 0 0 0 rgba(201, 162, 39, 0);
+  }
+  25% {
+    box-shadow: 0 0 26px rgba(201, 162, 39, 0.55);
+  }
+}
+
+@keyframes panel-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20% {
+    transform: translateX(-6px);
+  }
+  40% {
+    transform: translateX(6px);
+  }
+  60% {
+    transform: translateX(-4px);
+  }
+  80% {
+    transform: translateX(4px);
+  }
+}
+
+/* --- Battle arena ---------------------------------------------------------------------- */
+
+.stage-track {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.stage-track__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-bg);
+  border: 1px solid rgba(201, 162, 39, 0.3);
+}
+
+.stage-track__dot--cleared {
+  background: var(--color-gold);
+  border-color: var(--color-gold);
+  box-shadow: 0 0 6px rgba(201, 162, 39, 0.5);
+}
+
+.stage-track__dot--current {
+  border-color: var(--color-emerald);
+  box-shadow: 0 0 8px rgba(63, 163, 114, 0.6);
+}
+
+.arena {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 90px;
+  padding: 0 var(--space-4);
+  background: var(--color-bg);
+  border: var(--border-subtle);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.arena__fighter,
+.arena__foe {
+  font-size: 2.2rem;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.6));
+}
+
+.arena__clash {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%) scale(0);
+  font-size: 1.6rem;
+  opacity: 0;
+}
+
+.arena__result {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+
+.arena__result-text {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  letter-spacing: 0.03em;
+  color: var(--rar, var(--color-gold));
+  text-shadow: 0 0 10px;
+  background: rgba(16, 13, 10, 0.85);
+  padding: var(--space-1) var(--space-3);
+  border-radius: 999px;
+  opacity: 0;
+  animation: banner-in 0.4s ease-out 0.85s forwards;
+}
+
+.arena__result-text--fail {
+  color: var(--color-danger);
+}
+
+/* Shared timeline: fighter/foe lunge together mid-fight, then diverge on the outcome. */
+.arena--win .arena__fighter,
+.arena--loss .arena__fighter {
+  animation: fighter-approach 0.85s ease-in-out;
+}
+
+.arena--win .arena__foe,
+.arena--loss .arena__foe {
+  animation: foe-approach 0.85s ease-in-out;
+}
+
+.arena--win .arena__clash,
+.arena--loss .arena__clash {
+  animation: clash-flicker 0.85s ease-in-out;
+}
+
+.arena--win .arena {
+  animation: win-flash 0.7s ease-out 0.85s;
+}
+
+.arena--loss .arena__fighter {
+  animation:
+    fighter-approach 0.85s ease-in-out,
+    panel-shake 0.4s ease-in-out 0.85s;
+}
+
+@keyframes fighter-approach {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  50% {
+    transform: translateX(28px);
+  }
+}
+
+@keyframes foe-approach {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  50% {
+    transform: translateX(-28px);
+  }
+}
+
+@keyframes clash-flicker {
+  0%,
+  35% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0);
+  }
+  45%,
+  55%,
+  65% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.3);
+  }
+  50%,
+  60% {
+    opacity: 0.3;
+    transform: translate(-50%, -50%) scale(0.9);
+  }
+  75%,
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0);
+  }
+}
+
+/* Big banner CTA — the one loud element per panel ("Forge Armor" role, Grimoire tone). */
+.cta {
+  width: 100%;
+  padding: var(--space-3);
+  font-family: var(--font-display);
+  font-size: 1.3rem;
+  letter-spacing: 0.06em;
+  color: var(--color-gold);
+  background: linear-gradient(180deg, #3a2f14, #241c0c);
+  border: 1px solid rgba(201, 162, 39, 0.55);
+  border-radius: 10px;
+  box-shadow:
+    inset 0 1px 0 rgba(242, 233, 216, 0.12),
+    0 4px 14px rgba(0, 0, 0, 0.5);
+}
+
+.cta:hover:not(:disabled) {
+  background: linear-gradient(180deg, #4a3c1a, #2c2310);
+  box-shadow:
+    var(--glow-gold),
+    inset 0 1px 0 rgba(242, 233, 216, 0.12);
+}
+
+.cta:active:not(:disabled) {
+  transform: translateY(2px);
+}
+
+/* --- Ingredient chips (brew recipe) ----------------------------------------------------- */
+
+.chips {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.chip {
+  position: relative;
+}
+
+.chip input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  margin: 0;
+  pointer-events: none;
+}
+
+.chip__face {
+  display: inline-block;
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid rgba(201, 162, 39, 0.25);
+  border-radius: 999px;
+  color: var(--color-ink-dim);
+  cursor: pointer;
+  user-select: none;
+  transition:
+    color 0.15s ease,
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    background 0.15s ease;
+}
+
+.chip input:checked + .chip__face {
+  color: var(--color-gold);
+  border-color: var(--color-gold);
+  background: rgba(201, 162, 39, 0.08);
+  box-shadow: var(--glow-gold);
+}
+
+.chip input:focus-visible + .chip__face {
+  outline: 2px solid var(--color-gold);
+  outline-offset: 2px;
+}
+
+/* --- Battle panel ---------------------------------------------------------------------- */
+
+.battle__stage {
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+  color: var(--color-gold);
+}
+
+.battle__chance {
+  color: var(--color-ink-dim);
+  font-size: 0.95rem;
+}
+
+.meter {
+  height: 8px;
+  border: 1px solid rgba(201, 162, 39, 0.25);
+  border-radius: 999px;
+  background: var(--color-bg);
+  overflow: hidden;
+}
+
+.meter__fill {
+  height: 100%;
+  width: 0;
+  background: linear-gradient(90deg, var(--color-emerald), var(--color-gold));
+  transition: width 0.45s ease;
+}
+
+/* --- Potion shelf + mutation slots ----------------------------------------------------- */
+
+.slots {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.slot {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px dashed rgba(201, 162, 39, 0.3);
+  display: grid;
+  place-items: center;
+  font-size: 1rem;
+  color: var(--color-ink-dim);
+}
+
+.slot--filled {
+  border-style: solid;
+  color: var(--rar, var(--color-gold));
+  border-color: currentColor;
+  box-shadow: 0 0 10px;
+  text-shadow: 0 0 8px;
+}
+
+.potions-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.potions-list__empty {
+  color: var(--color-ink-dim);
+  font-style: italic;
+}
+
+.potion {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid transparent;
+  border-left: 2px solid transparent;
+  border-radius: var(--radius);
+}
+
+.potion--equipped {
+  border-left-color: var(--color-gold);
+  background: rgba(201, 162, 39, 0.05);
+}
+
+.potion__tile {
+  flex: none;
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  font-size: 1.4rem;
+  border-radius: var(--radius);
+  background: var(--color-bg);
+  border: 1px solid;
+  color: var(--rar, var(--color-ink));
+  text-shadow: 0 0 8px;
+}
+
+.potion__info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.potion__grade {
+  color: var(--color-ink-dim);
+  font-size: 0.85rem;
+  font-variant: small-caps;
+}
+
+/* --- Laboratory (upgrades + sifting) ----------------------------------------------------- */
+
+.shop-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.shop-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.shop-row__name {
+  flex: 1;
+  min-width: 0;
+}
+
+.shop-row__level {
+  color: var(--color-ink-dim);
+  font-size: 0.8rem;
+  border: 1px solid rgba(201, 162, 39, 0.2);
+  border-radius: 999px;
+  padding: 0 var(--space-2);
+  white-space: nowrap;
+}
+
+.shop-row__cost {
+  color: var(--color-gold);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.sift-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding-top: var(--space-2);
+  border-top: 1px solid rgba(201, 162, 39, 0.15);
+}
