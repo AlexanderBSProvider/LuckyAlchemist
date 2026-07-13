@@ -17,7 +17,7 @@ session — don't let code and course drift apart.
 
 ## Hard architectural rules
 
-1. **`src/core/` is pure.** No DOM, no Pixi, no `Date.now()`/`setTimeout`, no `Math.random()`.
+1. **`src/core/` is pure.** No DOM, no Three.js, no `Date.now()`/`setTimeout`, no `Math.random()`.
    All randomness flows through an injected `Rng` (see `src/core/rng.ts`). This is what
    makes core unit-testable and replayable by seed.
 2. **No balance numbers in code.** Ingredient weights, prices, upgrade curves, stage
@@ -45,6 +45,11 @@ session — don't let code and course drift apart.
 
 ## What's intentionally not here
 
-React, Zustand, Three.js — evaluated and rejected for this project (see plan history).
+React, Zustand — evaluated and rejected for this project (see plan history).
 State management is a small hand-rolled store in `src/store/` — that's deliberate, not
 a placeholder for "add a framework later".
+
+Three.js *was* on this rejected list; the owner reversed that call to move `render/` from
+PixiJS to Three.js (see [docs/THREEJS-MIGRATION.md](docs/THREEJS-MIGRATION.md) for the
+rationale and the "variant A" 2.5D approach — ortho camera, flat sprites/meshes, no new 3D
+art pipeline yet).
