@@ -1,0 +1,7 @@
+[
+  { "id": "cauldron-rim", "label": "Обід казана", "baseCost": 25, "growthRate": 1.15 },
+  { "id": "bellows", "label": "Міхи", "baseCost": 40, "growthRate": 1.15 },
+  { "id": "sieve-mesh", "label": "Сито", "baseCost": 60, "growthRate": 1.15 },
+  { "id": "distillery-coil", "label": "Спіраль перегінного куба", "baseCost": 90, "growthRate": 1.18 },
+  { "id": "warding-sigil", "label": "Оберігаючий сигіл", "baseCost": 140, "growthRate": 1.18 }
+]

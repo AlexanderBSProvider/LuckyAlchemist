@@ -1,0 +1,7 @@
+[
+  { "symbolId": "fire", "weight": 35 },
+  { "symbolId": "earth", "weight": 35 },
+  { "symbolId": "water", "weight": 20 },
+  { "symbolId": "metal", "weight": 8 },
+  { "symbolId": "spirit", "weight": 2 }
+]

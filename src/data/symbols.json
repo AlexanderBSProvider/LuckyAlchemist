@@ -1,0 +1,7 @@
+[
+  { "id": "fire", "label": "Вогонь", "rarity": "common" },
+  { "id": "earth", "label": "Земля", "rarity": "common" },
+  { "id": "water", "label": "Вода", "rarity": "uncommon" },
+  { "id": "metal", "label": "Метал", "rarity": "rare" },
+  { "id": "spirit", "label": "Дух", "rarity": "epic" }
+]

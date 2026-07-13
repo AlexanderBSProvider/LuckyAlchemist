@@ -1,0 +1,22 @@
+[
+  { "id": "dry-tinder", "label": "Сухий хмиз", "kind": "base" },
+  { "id": "clay-shard", "label": "Черепок глини", "kind": "base" },
+  {
+    "id": "firebrand-root",
+    "label": "Вогняний корінь",
+    "kind": "additive",
+    "weightModifiers": { "fire": 20 }
+  },
+  {
+    "id": "quicksilver",
+    "label": "Ртуть",
+    "kind": "additive",
+    "weightModifiers": { "metal": 12, "spirit": 1 }
+  },
+  {
+    "id": "spring-water",
+    "label": "Джерельна вода",
+    "kind": "additive",
+    "weightModifiers": { "water": 15 }
+  }
+]

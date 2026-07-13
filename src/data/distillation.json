@@ -1,0 +1,5 @@
+[
+  { "grade": "tincture", "advanceChance": 0.65 },
+  { "grade": "elixir", "advanceChance": 0.45 },
+  { "grade": "grand-elixir", "advanceChance": 0.25 }
+]

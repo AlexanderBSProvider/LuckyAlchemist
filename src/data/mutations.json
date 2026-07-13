@@ -1,0 +1,9 @@
+{
+  "maxEquippedSlots": 6,
+  "gradePower": {
+    "tincture": 1,
+    "elixir": 2,
+    "grand-elixir": 4,
+    "quintessence": 8
+  }
+}
