@@ -178,9 +178,13 @@ export function mountLabPanel(container: HTMLElement, deps: LabPanelDeps): LabPa
   const battleResultBox = el("div", "scene__result");
   scene.append(battleAnchor, sceneHead, sceneFoot, battleResultBox);
 
-  // --- Brew panel (cauldron lives here, like the reference's anvil) ---------------------
-  const brewPanel = el("div", "panel");
+  // --- Brew tab (cauldron lives here, like the reference's anvil) -----------------------
+  // `cauldronAnchor` sits *outside* `.panel` on purpose: `.panel` has an opaque background
+  // (grimoire.css), which would paint over `render/three-app.ts`'s canvas and hide the
+  // cauldron scene the same way `.scene` (the battle arena) deliberately avoids doing.
+  const brewTab = el("div", "brew-tab");
   const cauldronAnchor = el("div", "brew-cauldron");
+  const brewPanel = el("div", "panel");
   const rollsRow = el("div", "scene__rolls");
   const bannerBox = el("div", "scene__banner");
   const brewHint = el(
@@ -191,7 +195,8 @@ export function mountLabPanel(container: HTMLElement, deps: LabPanelDeps): LabPa
   const brewList = el("ul", "chips");
   const brewButton = el("button", "cta", "Варити");
   brewButton.type = "button";
-  brewPanel.append(cauldronAnchor, rollsRow, bannerBox, brewHint, brewList, brewButton);
+  brewPanel.append(rollsRow, bannerBox, brewHint, brewList, brewButton);
+  brewTab.append(cauldronAnchor, brewPanel);
 
   // --- Potions panel ---------------------------------------------------------------
   const potionsPanel = el("div", "panel");
@@ -212,7 +217,7 @@ export function mountLabPanel(container: HTMLElement, deps: LabPanelDeps): LabPa
 
   // --- Tab bar -----------------------------------------------------------------------
   const panels: Record<TabId, HTMLElement> = {
-    brew: brewPanel,
+    brew: brewTab,
     potions: potionsPanel,
     lab: labPanel,
   };

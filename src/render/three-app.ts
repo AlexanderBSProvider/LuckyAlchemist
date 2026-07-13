@@ -32,9 +32,17 @@ export function createThreeApp(): ThreeAppHandle {
   renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
   renderer.setSize(window.innerWidth, window.innerHeight);
 
+  // z-index: 0, not -1: a *negative* z-index only stays behind the DOM as long as no
+  // descendant anywhere under #app ever sets its own opaque background (any element that
+  // does paints over a negative-z-index sibling regardless of how deep it's nested — this
+  // bit us for real, see ui/lab-panel.css's `.panel`, which hid the cauldron scene).
+  // Pairing z-index: 0 here with `#app { position: relative; z-index: 1 }`
+  // (styles/grimoire.css) instead promotes #app's *entire* subtree into one stacking
+  // context above the canvas, unconditionally — no matter what any future component's CSS
+  // does internally.
   renderer.domElement.style.position = "fixed";
   renderer.domElement.style.inset = "0";
-  renderer.domElement.style.zIndex = "-1";
+  renderer.domElement.style.zIndex = "0";
   renderer.domElement.style.pointerEvents = "none";
   document.body.prepend(renderer.domElement);
 

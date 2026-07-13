@@ -53,9 +53,11 @@ body {
 
 /* Solid color lives on `html` only, not `body`: per the CSS canvas-background
  * propagation rule, a non-transparent `html` background becomes the viewport's true
- * bottom layer, painted *below* every positioned element regardless of z-index. If
- * `body` also painted an opaque color, it would sit in the normal in-flow paint step —
- * *above* `render/three-app.ts`'s fixed, z-index:-1 canvas — and hide it completely. */
+ * bottom layer, painted *below* everything else, including `render/three-app.ts`'s fixed
+ * canvas. If `body` also painted an opaque color, it would sit in the normal in-flow paint
+ * step instead — above the canvas — and hide it completely. (The canvas itself is kept
+ * below the DOM by `#app`'s own explicit stacking context below, not by a negative
+ * z-index — see the comment in three-app.ts.) */
 html {
   background: var(--color-bg);
 }
@@ -70,8 +72,13 @@ body {
   );
 }
 
-/* Portrait game frame (mobile-first, web-portal format): one centered column. */
+/* Portrait game frame (mobile-first, web-portal format): one centered column.
+ * `position: relative; z-index: 1` makes #app its own stacking context, explicitly above
+ * `render/three-app.ts`'s fixed canvas (z-index: 0) — see the comment there for why a plain
+ * negative z-index on the canvas isn't a reliable way to keep it behind the DOM. */
 #app {
+  position: relative;
+  z-index: 1;
   min-height: 100%;
   width: 100%;
   max-width: 560px;
