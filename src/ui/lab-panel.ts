@@ -1,6 +1,5 @@
 import "./lab-panel.css";
-import { estimatePlayerPower, upgradeCost } from "../core/economy";
-import { equippedPower } from "../core/mutations";
+import { upgradeCost } from "../core/economy";
 import type { Rng } from "../core/rng";
 import {
   ashSiftConfig,
@@ -12,22 +11,18 @@ import {
   symbols,
   upgrades,
 } from "../data";
+import { glyphFor } from "../data/glyphs";
 import type { GradeId, RarityTier } from "../data/schemas";
-import {
-  buyUpgrade,
-  brewCommand,
-  distillPotion,
-  equipPotion,
-  fightStage,
-  siftAshCommand,
-  unequipPotion,
-} from "../store/commands";
+import { performBrew, performDistill } from "../store/actions";
+import { buyUpgrade, equipPotion, siftAshCommand, unequipPotion } from "../store/commands";
+import type { EventBus, GameEventMap } from "../store/events";
 import type { GameState } from "../store/game-state";
+import { playerPower } from "../store/selectors";
 import type { Store } from "../store/store";
 
 export interface LabPanelDeps {
   store: Store<GameState>;
-  battleRng: Rng;
+  events: EventBus<GameEventMap>;
   siftRng: Rng;
   brewRng: Rng;
   distillRng: Rng;
@@ -48,26 +43,6 @@ const GRADE_LABELS: Record<GradeId, string> = {
   "grand-elixir": "великий еліксир",
   quintessence: "квінтесенція",
 };
-
-/** Engraved alchemical glyphs for era-1 symbols — unicode, no art assets (GAME-DESIGN §8). */
-const SYMBOL_GLYPHS: Record<string, string> = {
-  fire: "🜂",
-  earth: "🜃",
-  water: "🜄",
-  metal: "🜛",
-  spirit: "🜍",
-};
-
-function glyphFor(id: string): string {
-  return SYMBOL_GLYPHS[id] ?? "✶";
-}
-
-/** Cosmetic-only bestiary for the battle arena — cycles by stage id, no balance data. */
-const BESTIARY = ["🐀", "🦇", "🕷️", "🐍", "👹", "🦂", "🐺", "👺", "🐉", "💀"];
-
-function foeGlyphFor(stageId: number): string {
-  return BESTIARY[(stageId - 1) % BESTIARY.length] ?? "👹";
-}
 
 function ingredientLabel(id: string): string {
   return ingredients.find((ingredient) => ingredient.id === id)?.label ?? id;
@@ -123,63 +98,91 @@ function visualShuffle<T>(items: readonly T[]): T[] {
 type SceneBrewOutcome =
   { kind: "success"; symbolId: string; rarity: RarityTier; triple: boolean } | { kind: "fail" };
 
-const TAB_IDS = ["brew", "battle", "potions", "lab"] as const;
+const TAB_IDS = ["brew", "potions", "lab"] as const;
 type TabId = (typeof TAB_IDS)[number];
 
 const TAB_LABELS: Record<TabId, string> = {
   brew: "Казан",
-  battle: "Битва",
   potions: "Зілля",
   lab: "Лабораторія",
 };
 
+export interface LabPanelHandle {
+  /** Screen region `render/battle-scene.ts` draws the autobattler arena into. Exposed so
+   * `main.ts` can wire ui and render together without them importing each other
+   * (ARCHITECTURE.md §1/§6). */
+  battleAnchor: HTMLElement;
+  /** Screen region `render/cauldron-scene.ts` draws the cauldron + symbol rings into. */
+  cauldronAnchor: HTMLElement;
+  cleanup: () => void;
+}
+
 /**
- * Stage 1 game screen, portrait mobile-game layout: resource HUD on top, the persistent
- * cauldron scene (three slowly turning symbol rings that burst and reveal the brew's
- * rolls), then a tab bar switching the action panels — brewing recipe, autobattler stage,
- * potion shelf with mutation slots, and the laboratory (upgrades + ash sifting). Each
- * primary action is one big banner CTA. The Pixi renderer will later replace the CSS
- * scene; the HUD and panels stay DOM.
+ * Stage 1 game screen, composed like a playable-ad: the top half is the persistent
+ * autobattler scene (alchemist vs the current stage's foe, fighting on its own — Three.js
+ * draws it into `battleAnchor`), the bottom is the compact control deck — resource HUD,
+ * tab bar, and the action panels: brewing (with the Three.js cauldron in `cauldronAnchor`),
+ * potion shelf with mutation slots, laboratory (upgrades + ash sifting).
  */
-export function mountLabPanel(container: HTMLElement, deps: LabPanelDeps): () => void {
-  const { store, battleRng, siftRng, brewRng, distillRng } = deps;
+export function mountLabPanel(container: HTMLElement, deps: LabPanelDeps): LabPanelHandle {
+  const { store, events, siftRng, brewRng, distillRng } = deps;
 
   const root = el("section", "lab-panel");
 
   // --- Resource HUD -------------------------------------------------------------------
+  // Outlined-number pattern (see grimoire.css `.text-holder`): two identical spans, the
+  // absolute one painted as a thick stroke under the filled one — game-style HUD digits.
+  const makeOutlinedText = (): { holder: HTMLElement; set: (text: string) => void } => {
+    const holder = el("span", "text-holder");
+    const outline = el("span", "text outline");
+    outline.setAttribute("aria-hidden", "true");
+    const fill = el("span", "text");
+    holder.append(outline, fill);
+    return {
+      holder,
+      set: (text) => {
+        outline.textContent = text;
+        fill.textContent = text;
+      },
+    };
+  };
+
   const hud = el("div", "hud");
   const goldChip = el("span", "hud__res hud__res--gold");
   goldChip.title = "Золото";
+  const goldText = makeOutlinedText();
+  goldChip.append(goldText.holder);
   const ashChip = el("span", "hud__res hud__res--ash");
   ashChip.title = "Попіл";
+  const ashText = makeOutlinedText();
+  ashChip.append(ashText.holder);
   hud.append(goldChip, ashChip);
 
-  // --- Cauldron scene -------------------------------------------------------------------
+  // --- Battle scene (top, always visible) -----------------------------------------------
+  // `battleAnchor` is an empty box: `render/battle-scene.ts` draws the arena into its
+  // screen rect every frame. The DOM here is only the thin overlay on top of the scene —
+  // stage progress, win-chance meter, and the victory banner.
   const scene = el("section", "scene");
-  const ringsWrap = el("div", "scene__rings");
-  ["ring--outer", "ring--mid", "ring--inner"].forEach((ringClass, ringIndex) => {
-    const ring = el("div", `ring ${ringClass}`);
-    symbols.forEach((symbol, i) => {
-      const arm = el("div", "ring__arm");
-      arm.style.setProperty("--angle", `${String((360 / symbols.length) * i + ringIndex * 24)}deg`);
-      arm.append(el("span", "ring__glyph", glyphFor(symbol.id)));
-      ring.append(arm);
-    });
-    ringsWrap.append(ring);
-  });
-  const cauldron = el("div", "cauldron");
-  cauldron.append(
-    el("span", "cauldron__bubble"),
-    el("span", "cauldron__bubble"),
-    el("span", "cauldron__bubble"),
-  );
-  ringsWrap.append(cauldron);
+  const battleAnchor = el("div", "scene__battle");
+  const sceneHead = el("div", "scene__head");
+  const stageLine = el("p", "scene__stage");
+  const stageTrack = el("div", "stage-track");
+  sceneHead.append(stageLine, stageTrack);
+  const sceneFoot = el("div", "scene__foot");
+  const meter = el("div", "meter");
+  const meterFill = el("div", "meter__fill");
+  meter.append(meterFill);
+  const chanceLine = el("p", "scene__chance");
+  const rewardLine = el("p", "scene__reward");
+  sceneFoot.append(meter, chanceLine, rewardLine);
+  const battleResultBox = el("div", "scene__result");
+  scene.append(battleAnchor, sceneHead, sceneFoot, battleResultBox);
+
+  // --- Brew panel (cauldron lives here, like the reference's anvil) ---------------------
+  const brewPanel = el("div", "panel");
+  const cauldronAnchor = el("div", "brew-cauldron");
   const rollsRow = el("div", "scene__rolls");
   const bannerBox = el("div", "scene__banner");
-  scene.append(ringsWrap, rollsRow, bannerBox);
-
-  // --- Brew panel -------------------------------------------------------------------
-  const brewPanel = el("div", "panel");
   const brewHint = el(
     "p",
     "panel__hint",
@@ -188,28 +191,7 @@ export function mountLabPanel(container: HTMLElement, deps: LabPanelDeps): () =>
   const brewList = el("ul", "chips");
   const brewButton = el("button", "cta", "Варити");
   brewButton.type = "button";
-  brewPanel.append(brewHint, brewList, brewButton);
-
-  // --- Battle panel -------------------------------------------------------------------
-  const battlePanel = el("div", "panel");
-  const stageTrack = el("div", "stage-track");
-  const stageLine = el("p", "battle__stage");
-
-  const arena = el("div", "arena");
-  const fighter = el("span", "arena__fighter", "🧙");
-  const clashFx = el("span", "arena__clash", "💥");
-  const foe = el("span", "arena__foe");
-  const resultBox = el("div", "arena__result");
-  arena.append(fighter, clashFx, foe, resultBox);
-
-  const meter = el("div", "meter");
-  const meterFill = el("div", "meter__fill");
-  meter.append(meterFill);
-  const chanceLine = el("p", "battle__chance");
-  const rewardLine = el("p", "panel__hint");
-  const fightButton = el("button", "cta", "У бій");
-  fightButton.type = "button";
-  battlePanel.append(stageTrack, stageLine, arena, meter, chanceLine, rewardLine, fightButton);
+  brewPanel.append(cauldronAnchor, rollsRow, bannerBox, brewHint, brewList, brewButton);
 
   // --- Potions panel ---------------------------------------------------------------
   const potionsPanel = el("div", "panel");
@@ -231,7 +213,6 @@ export function mountLabPanel(container: HTMLElement, deps: LabPanelDeps): () =>
   // --- Tab bar -----------------------------------------------------------------------
   const panels: Record<TabId, HTMLElement> = {
     brew: brewPanel,
-    battle: battlePanel,
     potions: potionsPanel,
     lab: labPanel,
   };
@@ -254,11 +235,8 @@ export function mountLabPanel(container: HTMLElement, deps: LabPanelDeps): () =>
   };
   setTab("brew");
 
-  root.append(hud, scene, tabsNav, brewPanel, battlePanel, potionsPanel, labPanel);
+  root.append(scene, hud, tabsNav, brewPanel, potionsPanel, labPanel);
   container.append(root);
-
-  const playerPower = (state: GameState): number =>
-    estimatePlayerPower(state.upgradeLevels) + equippedPower(state.potions, mutationConfig);
 
   // --- Renders ------------------------------------------------------------------------
   let prevGold: number | null = null;
@@ -266,8 +244,8 @@ export function mountLabPanel(container: HTMLElement, deps: LabPanelDeps): () =>
 
   const renderResources = (state: GameState): void => {
     const { gold, ash } = state.resources;
-    goldChip.textContent = `☉ ${String(gold)}`;
-    ashChip.textContent = `Попіл ${String(ash)}`;
+    goldText.set(`☉ ${String(gold)}`);
+    ashText.set(`Попіл ${String(ash)}`);
     if (prevGold !== null && gold !== prevGold) pulse(goldChip);
     if (prevAsh !== null && ash !== prevAsh) pulse(ashChip);
     prevGold = gold;
@@ -293,23 +271,21 @@ export function mountLabPanel(container: HTMLElement, deps: LabPanelDeps): () =>
     const stage = stages.find((candidate) => candidate.id === state.currentStageId);
     const power = playerPower(state);
     if (!stage) {
-      foe.textContent = "🏆";
       stageLine.textContent = "Усі стейджі зачищено";
       meterFill.style.width = "100%";
       chanceLine.textContent = `Сила: ${String(power)}`;
       rewardLine.textContent = "";
-      fightButton.disabled = true;
       return;
     }
-    foe.textContent = foeGlyphFor(stage.id);
+    // Under auto-battle the percentage is usually tiny at a wall — the meter reads as
+    // "how close your power is to this foe", which is the honest signal to show.
     const winChance = Math.round((100 * power) / (power + stage.difficulty));
     stageLine.textContent = `Стейдж ${String(stage.id)} / ${String(stages.length)}`;
-    meterFill.style.width = `${String(winChance)}%`;
-    chanceLine.textContent = `Сила ${String(power)} проти ${String(stage.difficulty)} — шанс перемоги ${String(winChance)}%`;
+    meterFill.style.width = `${String(Math.max(2, winChance))}%`;
+    chanceLine.textContent = `Сила ${String(power)} проти ${String(stage.difficulty)}`;
     rewardLine.textContent =
-      `Нагорода: ${String(stage.rewardGold)} золота + ${String(stage.rewardIngredientAmount)} ` +
+      `Нагорода: ${String(stage.rewardGold)} ☉ + ${String(stage.rewardIngredientAmount)} ` +
       ingredientLabel(stage.rewardIngredientId);
-    fightButton.disabled = false;
   };
 
   let brewLocked = false;
@@ -378,7 +354,7 @@ export function mountLabPanel(container: HTMLElement, deps: LabPanelDeps): () =>
         distillButton.type = "button";
         distillButton.disabled = potion.grade === "quintessence";
         distillButton.addEventListener("click", () => {
-          store.dispatch(distillPotion(distillRng, distillationStages, potion.id));
+          performDistill(store, events, distillRng, distillationStages, potion.id);
         });
 
         const equipButton = el("button", "btn-small", potion.equipped ? "Зняти" : "Екіпірувати");
@@ -444,7 +420,6 @@ export function mountLabPanel(container: HTMLElement, deps: LabPanelDeps): () =>
   // --- Brew scene replay ----------------------------------------------------------------
   const playBrewScene = (outcome: SceneBrewOutcome): void => {
     brewLocked = true;
-    scene.classList.add("scene--brewing");
     renderBrew(store.getState());
 
     const symbolIds = symbols.map((symbol) => symbol.id);
@@ -498,7 +473,6 @@ export function mountLabPanel(container: HTMLElement, deps: LabPanelDeps): () =>
       "animationend",
       () => {
         brewLocked = false;
-        scene.classList.remove("scene--brewing");
         renderBrew(store.getState());
       },
       { once: true },
@@ -506,57 +480,47 @@ export function mountLabPanel(container: HTMLElement, deps: LabPanelDeps): () =>
     bannerBox.replaceChildren(banner);
   };
 
-  // --- Battle arena replay --------------------------------------------------------------
-  let fightLocked = false;
-
-  const playBattleScene = (
-    won: boolean,
-    reward: { gold: number; ingredientId: string; ingredientAmount: number } | null,
-  ): void => {
-    fightLocked = true;
-    fightButton.disabled = true;
-    arena.classList.remove("arena--win", "arena--loss");
-    resultBox.replaceChildren();
-    void arena.offsetWidth;
-    arena.classList.add(won ? "arena--win" : "arena--loss");
-
-    const result = won
-      ? el(
-          "p",
-          "arena__result-text rar-legendary",
-          reward
-            ? `+${String(reward.gold)} ☉  +${String(reward.ingredientAmount)} ${ingredientLabel(reward.ingredientId)}`
-            : "Перемога!",
-        )
-      : el("p", "arena__result-text arena__result-text--fail", "Поразка...");
+  // --- Victory banner over the battle scene ----------------------------------------------
+  // The fight itself is drawn by `render/battle-scene.ts`; the DOM only floats the reward
+  // text on a win. Losses show no banner — under auto-battle they repeat every few seconds
+  // at a power wall, and a "Поразка..." toast on each would be pure noise.
+  const showVictoryBanner = (reward: {
+    gold: number;
+    ingredientId: string;
+    ingredientAmount: number;
+  }): void => {
+    const result = el(
+      "p",
+      "scene__result-text rar-legendary",
+      `+${String(reward.gold)} ☉  +${String(reward.ingredientAmount)} ${ingredientLabel(reward.ingredientId)}`,
+    );
     result.addEventListener(
       "animationend",
       () => {
-        fightLocked = false;
-        renderStage(store.getState());
+        result.remove();
       },
       { once: true },
     );
-    resultBox.append(result);
+    battleResultBox.replaceChildren(result);
   };
 
-  fightButton.addEventListener("click", () => {
-    if (fightLocked) return;
-    const before = store.getState();
-    const stage = stages.find((candidate) => candidate.id === before.currentStageId);
-    if (!stage) return;
-    store.dispatch(fightStage(battleRng, stage, playerPower(before)));
-    const won = store.getState().currentStageId > before.currentStageId;
-    playBattleScene(
-      won,
-      won
-        ? {
-            gold: stage.rewardGold,
-            ingredientId: stage.rewardIngredientId,
-            ingredientAmount: stage.rewardIngredientAmount,
-          }
-        : null,
-    );
+  // Outcome events fire synchronously inside performFight/performBrew (see
+  // store/actions.ts) — performFight is driven by the auto-battle interval in `main.ts`.
+  const unsubscribeBattleWon = events.on(
+    "battle:won",
+    ({ rewardGold, rewardIngredientId, rewardIngredientAmount }) => {
+      showVictoryBanner({
+        gold: rewardGold,
+        ingredientId: rewardIngredientId,
+        ingredientAmount: rewardIngredientAmount,
+      });
+    },
+  );
+  const unsubscribeBrewSuccess = events.on("brew:success", ({ symbolId, rarity, triple }) => {
+    playBrewScene({ kind: "success", symbolId, rarity, triple });
+  });
+  const unsubscribeBrewFail = events.on("brew:fail", () => {
+    playBrewScene({ kind: "fail" });
   });
 
   brewButton.addEventListener("click", () => {
@@ -565,24 +529,7 @@ export function mountLabPanel(container: HTMLElement, deps: LabPanelDeps): () =>
     const ingredientIds = [...checked].map((input) => input.value);
     if (ingredientIds.length === 0) return;
 
-    const before = store.getState();
-    store.dispatch(brewCommand(brewRng, { rings, symbols, ingredients }, { ingredientIds }));
-    const after = store.getState();
-
-    if (after.potions.length > before.potions.length) {
-      const newest = after.potions[after.potions.length - 1];
-      if (!newest) return;
-      // A rarity above the symbol's base tier can only come from the triple-match bump.
-      const baseRarity = symbols.find((symbol) => symbol.id === newest.symbolId)?.rarity;
-      playBrewScene({
-        kind: "success",
-        symbolId: newest.symbolId,
-        rarity: newest.rarity,
-        triple: baseRarity !== undefined && baseRarity !== newest.rarity,
-      });
-    } else if (after.resources.ash > before.resources.ash) {
-      playBrewScene({ kind: "fail" });
-    }
+    performBrew(store, events, brewRng, { rings, symbols, ingredients }, { ingredientIds });
   });
 
   siftButton.addEventListener("click", () => {
@@ -591,11 +538,18 @@ export function mountLabPanel(container: HTMLElement, deps: LabPanelDeps): () =>
     store.dispatch(siftAshCommand(siftRng, ashSiftConfig, ash));
   });
 
-  return () => {
-    unsubscribeResources();
-    unsubscribeStage();
-    unsubscribeUpgrades();
-    unsubscribePotions();
-    root.remove();
+  return {
+    battleAnchor,
+    cauldronAnchor,
+    cleanup: () => {
+      unsubscribeResources();
+      unsubscribeStage();
+      unsubscribeUpgrades();
+      unsubscribePotions();
+      unsubscribeBattleWon();
+      unsubscribeBrewSuccess();
+      unsubscribeBrewFail();
+      root.remove();
+    },
   };
 }

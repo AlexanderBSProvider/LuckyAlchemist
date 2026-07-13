@@ -73,154 +73,134 @@
   }
 }
 
-/* --- Cauldron scene ------------------------------------------------------------------ */
+/* --- Battle scene (top, always visible) ---------------------------------------------- */
 
+/* No opaque fill here (unlike `.panel`) — `render/three-app.ts` mounts its canvas as a
+ * fixed background layer behind all DOM (z-index -1); an opaque `.scene` background would
+ * paint over it and hide the arena `render/battle-scene.ts` draws into `.scene__battle`.
+ * The faint vignette keeps the candle-lit Grimoire mood without occluding the canvas. */
 .scene {
   position: relative;
+  width: 100%;
+  height: clamp(260px, 44vh, 430px);
+  border: var(--border-subtle);
+  border-radius: 12px;
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse at 50% 78%, rgba(63, 163, 114, 0.08), transparent 55%),
+    radial-gradient(ellipse at 50% 0%, rgba(201, 162, 39, 0.06), transparent 45%);
+  box-shadow: inset 0 0 60px rgba(0, 0, 0, 0.55);
+}
+
+/* Empty anchor box — `render/battle-scene.ts` draws the arena into this element's screen
+ * rect every frame. Layout owned by CSS, pixels by Three.js. */
+.scene__battle {
+  position: absolute;
+  inset: 0;
+}
+
+.scene__head {
+  position: absolute;
+  top: var(--space-2);
+  left: 0;
+  right: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-3);
-  border: var(--border-subtle);
-  border-radius: 10px;
-  background:
-    radial-gradient(ellipse at 50% 42%, rgba(63, 163, 114, 0.07), transparent 62%),
-    var(--color-bg-raised);
-  overflow: hidden;
+  gap: var(--space-1);
+  pointer-events: none;
 }
 
-.scene__rings {
-  position: relative;
-  width: min(300px, 74vw);
-  aspect-ratio: 1 / 1;
+.scene__stage {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+  letter-spacing: 0.08em;
+  color: var(--color-gold);
+  text-shadow:
+    0 0 12px rgba(201, 162, 39, 0.4),
+    0 2px 4px rgba(0, 0, 0, 0.8);
 }
 
-.scene--brewing .scene__rings {
-  /* 720° = whole turns, so `forwards` ends exactly where the idle spin left off. */
-  animation: rings-burst 1.15s cubic-bezier(0.22, 0.8, 0.3, 1) forwards;
-}
-
-@keyframes rings-burst {
-  to {
-    transform: rotate(720deg);
-  }
-}
-
-.ring {
+.scene__foot {
   position: absolute;
-  border: 1px solid rgba(201, 162, 39, 0.16);
-  border-radius: 50%;
-  animation: ring-spin var(--spin-dur, 80s) linear infinite;
+  bottom: var(--space-2);
+  left: var(--space-3);
+  right: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  pointer-events: none;
 }
 
-@keyframes ring-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-.ring--outer {
-  inset: 0;
-  --spin-dur: 95s;
-}
-
-.ring--mid {
-  inset: 15%;
-  --spin-dur: 70s;
-  animation-direction: reverse;
-}
-
-.ring--inner {
-  inset: 30%;
-  --spin-dur: 50s;
-}
-
-.ring__arm {
-  position: absolute;
-  inset: 0;
-  transform: rotate(var(--angle));
-}
-
-.ring__glyph {
-  position: absolute;
-  top: 0;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  font-size: 1.15rem;
+.scene__chance {
+  margin: 0;
+  font-size: 0.85rem;
   color: var(--color-ink-dim);
-  text-shadow: 0 0 8px rgba(201, 162, 39, 0.3);
-  background: var(--color-bg-raised);
-  padding: 0 2px;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
 }
 
-.ring--inner .ring__glyph {
-  font-size: 0.95rem;
+.scene__reward {
+  margin: 0;
+  font-size: 0.8rem;
+  font-style: italic;
+  color: var(--color-ink-dim);
+  opacity: 0.8;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
 }
 
-.cauldron {
+.scene__result {
   position: absolute;
-  inset: 40%;
-  border-radius: 50%;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+
+.scene__result-text {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  letter-spacing: 0.03em;
+  color: var(--rar, var(--color-gold));
+  text-shadow: 0 0 10px;
+  background: rgba(16, 13, 10, 0.85);
   border: 1px solid rgba(201, 162, 39, 0.35);
-  background: radial-gradient(circle at 50% 32%, rgba(63, 163, 114, 0.9), #14382a 72%);
-  overflow: hidden;
-  animation: liquid-glow 4s ease-in-out infinite alternate;
+  padding: var(--space-1) var(--space-3);
+  border-radius: 999px;
+  opacity: 0;
+  animation: victory-toast 2.4s ease-out forwards;
 }
 
-@keyframes liquid-glow {
-  from {
-    box-shadow:
-      0 0 10px rgba(63, 163, 114, 0.25),
-      inset 0 -6px 12px rgba(0, 0, 0, 0.5);
-  }
-  to {
-    box-shadow:
-      0 0 26px rgba(63, 163, 114, 0.55),
-      inset 0 -6px 12px rgba(0, 0, 0, 0.5);
-  }
-}
-
-.cauldron__bubble {
-  position: absolute;
-  bottom: 8%;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: rgba(242, 233, 216, 0.55);
-  animation: bubble-rise 3.4s ease-in infinite;
-}
-
-.cauldron__bubble:nth-child(1) {
-  left: 30%;
-}
-
-.cauldron__bubble:nth-child(2) {
-  left: 55%;
-  width: 4px;
-  height: 4px;
-  animation-delay: 1.2s;
-}
-
-.cauldron__bubble:nth-child(3) {
-  left: 68%;
-  width: 5px;
-  height: 5px;
-  animation-delay: 2.3s;
-}
-
-@keyframes bubble-rise {
+@keyframes victory-toast {
   0% {
-    transform: translateY(0);
     opacity: 0;
+    transform: translateY(10px) scale(0.9);
   }
-  15% {
-    opacity: 0.9;
+  12% {
+    opacity: 1;
+    transform: translateY(0) scale(1.04);
+  }
+  18% {
+    transform: translateY(0) scale(1);
+  }
+  78% {
+    opacity: 1;
+    transform: translateY(0);
   }
   100% {
-    transform: translateY(-48px);
     opacity: 0;
+    transform: translateY(-14px);
   }
+}
+
+/* --- Cauldron block inside the brew tab ------------------------------------------------ */
+
+/* Anchor for `render/cauldron-scene.ts` — the compact "anvil spot" of the brew tab. */
+.brew-cauldron {
+  position: relative;
+  width: 100%;
+  height: clamp(160px, 24vh, 220px);
 }
 
 /* --- Brew rolls + result banner ------------------------------------------------------ */
@@ -358,40 +338,12 @@
   font-style: italic;
 }
 
-@keyframes win-flash {
-  0%,
-  100% {
-    box-shadow: 0 0 0 rgba(201, 162, 39, 0);
-  }
-  25% {
-    box-shadow: 0 0 26px rgba(201, 162, 39, 0.55);
-  }
-}
-
-@keyframes panel-shake {
-  0%,
-  100% {
-    transform: translateX(0);
-  }
-  20% {
-    transform: translateX(-6px);
-  }
-  40% {
-    transform: translateX(6px);
-  }
-  60% {
-    transform: translateX(-4px);
-  }
-  80% {
-    transform: translateX(4px);
-  }
-}
-
-/* --- Battle arena ---------------------------------------------------------------------- */
+/* --- Stage progress dots (battle scene overlay) ----------------------------------------- */
 
 .stage-track {
   display: flex;
   flex-wrap: wrap;
+  justify-content: center;
   gap: 6px;
 }
 
@@ -412,130 +364,6 @@
 .stage-track__dot--current {
   border-color: var(--color-emerald);
   box-shadow: 0 0 8px rgba(63, 163, 114, 0.6);
-}
-
-.arena {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  height: 90px;
-  padding: 0 var(--space-4);
-  background: var(--color-bg);
-  border: var(--border-subtle);
-  border-radius: 10px;
-  overflow: hidden;
-}
-
-.arena__fighter,
-.arena__foe {
-  font-size: 2.2rem;
-  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.6));
-}
-
-.arena__clash {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%) scale(0);
-  font-size: 1.6rem;
-  opacity: 0;
-}
-
-.arena__result {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  pointer-events: none;
-}
-
-.arena__result-text {
-  margin: 0;
-  font-family: var(--font-display);
-  font-size: 1.15rem;
-  letter-spacing: 0.03em;
-  color: var(--rar, var(--color-gold));
-  text-shadow: 0 0 10px;
-  background: rgba(16, 13, 10, 0.85);
-  padding: var(--space-1) var(--space-3);
-  border-radius: 999px;
-  opacity: 0;
-  animation: banner-in 0.4s ease-out 0.85s forwards;
-}
-
-.arena__result-text--fail {
-  color: var(--color-danger);
-}
-
-/* Shared timeline: fighter/foe lunge together mid-fight, then diverge on the outcome. */
-.arena--win .arena__fighter,
-.arena--loss .arena__fighter {
-  animation: fighter-approach 0.85s ease-in-out;
-}
-
-.arena--win .arena__foe,
-.arena--loss .arena__foe {
-  animation: foe-approach 0.85s ease-in-out;
-}
-
-.arena--win .arena__clash,
-.arena--loss .arena__clash {
-  animation: clash-flicker 0.85s ease-in-out;
-}
-
-.arena--win .arena {
-  animation: win-flash 0.7s ease-out 0.85s;
-}
-
-.arena--loss .arena__fighter {
-  animation:
-    fighter-approach 0.85s ease-in-out,
-    panel-shake 0.4s ease-in-out 0.85s;
-}
-
-@keyframes fighter-approach {
-  0%,
-  100% {
-    transform: translateX(0);
-  }
-  50% {
-    transform: translateX(28px);
-  }
-}
-
-@keyframes foe-approach {
-  0%,
-  100% {
-    transform: translateX(0);
-  }
-  50% {
-    transform: translateX(-28px);
-  }
-}
-
-@keyframes clash-flicker {
-  0%,
-  35% {
-    opacity: 0;
-    transform: translate(-50%, -50%) scale(0);
-  }
-  45%,
-  55%,
-  65% {
-    opacity: 1;
-    transform: translate(-50%, -50%) scale(1.3);
-  }
-  50%,
-  60% {
-    opacity: 0.3;
-    transform: translate(-50%, -50%) scale(0.9);
-  }
-  75%,
-  100% {
-    opacity: 0;
-    transform: translate(-50%, -50%) scale(0);
-  }
 }
 
 /* Big banner CTA — the one loud element per panel ("Forge Armor" role, Grimoire tone). */
@@ -615,18 +443,7 @@
   outline-offset: 2px;
 }
 
-/* --- Battle panel ---------------------------------------------------------------------- */
-
-.battle__stage {
-  font-family: var(--font-display);
-  font-size: 1.1rem;
-  color: var(--color-gold);
-}
-
-.battle__chance {
-  color: var(--color-ink-dim);
-  font-size: 0.95rem;
-}
+/* --- Win-chance meter (battle scene overlay) --------------------------------------------- */
 
 .meter {
   height: 8px;

@@ -27,13 +27,9 @@
   --space-4: 1.5rem;
   --space-5: 2.5rem;
 
-  /* Rarity tiers (potion glow language, GAME-DESIGN §8: vial × rarity color × stamp) */
-  --rarity-common: #a89a82;
-  --rarity-uncommon: #3fa372;
-  --rarity-rare: #4f7ea8;
-  --rarity-epic: #8a5fb5;
-  --rarity-legendary: #c9a227;
-  --rarity-quintessence: #f2e9d8;
+  /* Rarity tiers: --rarity-<tier> custom properties are stamped onto :root at bootstrap
+   * by main.ts from src/data/rarity-visuals.ts — the canonical source shared with the
+   * Three.js renderer. Do not hardcode rarity colors here. */
 
   /* Effects */
   --radius: 4px;
@@ -49,14 +45,23 @@ html,
 body {
   margin: 0;
   height: 100%;
-  background: var(--color-bg);
   color: var(--color-ink);
   font-family: var(--font-body);
   font-size: 16px;
   line-height: 1.5;
 }
 
-/* Subtle vignette so the lab feels lit by a single candle, not a flat void. */
+/* Solid color lives on `html` only, not `body`: per the CSS canvas-background
+ * propagation rule, a non-transparent `html` background becomes the viewport's true
+ * bottom layer, painted *below* every positioned element regardless of z-index. If
+ * `body` also painted an opaque color, it would sit in the normal in-flow paint step —
+ * *above* `render/three-app.ts`'s fixed, z-index:-1 canvas — and hide it completely. */
+html {
+  background: var(--color-bg);
+}
+
+/* Subtle vignette so the lab feels lit by a single candle, not a flat void. Translucent,
+ * so it layers over the Three.js canvas without hiding it. */
 body {
   background-image: radial-gradient(
     ellipse at 50% 20%,
@@ -125,6 +130,37 @@ button.btn-small {
 :focus-visible {
   outline: 2px solid var(--color-gold);
   outline-offset: 2px;
+}
+
+/*
+ * Outlined text pattern (ported as a CSS technique from playable-ad UIs): a wrapper holds
+ * two identical text spans — the absolute `.outline` copy underneath painted only as a
+ * thick stroke, the normal copy on top with a solid fill. Gives game-style outlined
+ * numbers with zero JS and zero canvas. Usage:
+ *
+ *   <span class="text-holder">
+ *     <span class="text outline" aria-hidden="true">123</span>
+ *     <span class="text">123</span>
+ *   </span>
+ */
+.text-holder {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.text-holder > .text.outline {
+  position: absolute;
+  z-index: 0;
+  pointer-events: none;
+  color: transparent;
+  -webkit-text-stroke: 0.16em var(--outline-color, #000);
+}
+
+.text-holder > .text:not(.outline) {
+  position: relative;
+  z-index: 1;
 }
 
 @media (prefers-reduced-motion: reduce) {

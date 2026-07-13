@@ -1,17 +1,28 @@
 import "./styles/grimoire.css";
 import { createInitialSave } from "./core/save";
 import { createRng } from "./core/rng";
+import { battleConfig, stages } from "./data";
+import { RARITY_TINTS, rarityCssColor } from "./data/rarity-visuals";
+import type { RarityTier } from "./data/schemas";
 import { createLocalAdapter } from "./platform/local";
+import { createThreeApp } from "./render/three-app";
+import { mountBattleScene } from "./render/battle-scene";
+import { mountCauldronScene } from "./render/cauldron-scene";
+import { performFight } from "./store/actions";
 import { createEventBus } from "./store/events";
 import type { GameEventMap } from "./store/events";
 import { loadGame } from "./store/persistence";
+import { playerPower } from "./store/selectors";
 import { createStore } from "./store/store";
 import { mountAppShell } from "./ui/app-shell";
 import { mountLabPanel } from "./ui/lab-panel";
 
 /**
  * Composition root: the one place allowed to import from every layer (core, store,
- * platform, ui) and wire them together. Nothing below here should ever import `main.ts`.
+ * platform, render, ui) and wire them together. Nothing below here should ever import
+ * `main.ts`. `render/` (Three.js, the scene) and `ui/` (DOM, the interface on top of it) are
+ * independent siblings — this is the one place that hands `render/` a DOM anchor owned by
+ * `ui/`, since the two leaf layers must not import each other (ARCHITECTURE.md §1/§6).
  */
 async function bootstrap(): Promise<void> {
   const now = (): number => Date.now();
@@ -29,18 +40,40 @@ async function bootstrap(): Promise<void> {
     throw new Error("main.ts: #app root element not found");
   }
 
+  // Rarity colors live in data/rarity-visuals.ts (shared with the Three.js renderer, which
+  // can't read CSS variables); the DOM side receives them as --rarity-* custom properties.
+  for (const tier of Object.keys(RARITY_TINTS) as RarityTier[]) {
+    document.documentElement.style.setProperty(`--rarity-${tier}`, rarityCssColor(tier));
+  }
+
+  const three = createThreeApp();
+
   mountAppShell(container, { store, events, io: platform, now });
 
   // Forked *after* loadGame so a restored save's seed drives these streams, not a
   // throwaway seed from the pre-load initial state.
   const rootRng = createRng(store.getState().seed);
-  mountLabPanel(container, {
+  const battleRng = rootRng.fork("battle");
+  const lab = mountLabPanel(container, {
     store,
-    battleRng: rootRng.fork("battle"),
+    events,
     siftRng: rootRng.fork("sift"),
     brewRng: rootRng.fork("brew"),
     distillRng: rootRng.fork("distill"),
   });
+  mountBattleScene(three.scene, { events, store, ticker: three.ticker, anchor: lab.battleAnchor });
+  mountCauldronScene(three.scene, { events, ticker: three.ticker, anchor: lab.cauldronAnchor });
+
+  // Auto-battle driver: the alchemist fights the current stage on a fixed cadence
+  // (data/battle.json), no button. The timer lives here in the composition root — core
+  // stays free of setTimeout/setInterval (CLAUDE.md rule 1); each tick resolves through
+  // the same performFight → events pipeline the scene and UI already listen to.
+  window.setInterval(() => {
+    const state = store.getState();
+    const stage = stages.find((candidate) => candidate.id === state.currentStageId);
+    if (!stage) return;
+    performFight(store, events, battleRng, stage, playerPower(state));
+  }, battleConfig.autoIntervalSeconds * 1000);
 
   platform.gameplayStart();
 }
