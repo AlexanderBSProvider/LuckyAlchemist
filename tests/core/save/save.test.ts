@@ -17,7 +17,9 @@ describe("createInitialSave", () => {
     expect(save.seed).toBe("seed-1");
     expect(save.createdAt).toBe(NOW);
     expect(save.lastSavedAt).toBe(NOW);
-    expect(save.resources.gold).toBe(0);
+    expect(save.resources).toEqual({ gold: 0, ash: 0, ingredients: {} });
+    expect(save.upgradeLevels).toEqual({});
+    expect(save.currentStageId).toBe(1);
   });
 });
 
@@ -58,7 +60,8 @@ describe("deserializeSave error handling", () => {
   });
 
   it("returns invalid-shape for a save with a negative gold value", () => {
-    const broken = { ...createInitialSave("broken", NOW), resources: { gold: -5 } };
+    const initial = createInitialSave("broken", NOW);
+    const broken = { ...initial, resources: { ...initial.resources, gold: -5 } };
     const result = deserializeSave(JSON.stringify(broken), NOW);
     expect(result).toMatchObject({ ok: false, reason: "invalid-shape" });
   });
@@ -96,5 +99,29 @@ describe("migrateToCurrent", () => {
     const current = createInitialSave("no-op-migration", NOW);
     const migrated = migrateToCurrent(current, NOW);
     expect(migrated).toEqual(current);
+  });
+
+  it("migrates a v1 save all the way up to the current schema, defaulting new fields", () => {
+    const v1Save = {
+      schemaVersion: 1,
+      seed: "v1-seed",
+      createdAt: NOW,
+      lastSavedAt: NOW,
+      resources: { gold: 30 },
+    };
+
+    const migrated = migrateToCurrent(v1Save, NOW);
+
+    expect(migrated).toEqual({
+      schemaVersion: CURRENT_SAVE_VERSION,
+      seed: "v1-seed",
+      createdAt: NOW,
+      lastSavedAt: NOW,
+      resources: { gold: 30, ash: 0, ingredients: {} },
+      upgradeLevels: {},
+      currentStageId: 1,
+      potions: [],
+      nextPotionId: 1,
+    });
   });
 });

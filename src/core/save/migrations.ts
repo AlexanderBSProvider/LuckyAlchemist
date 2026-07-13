@@ -40,9 +40,50 @@ function migrateV0ToV1(old: unknown, now: number): unknown {
   };
 }
 
+/** Adds ash/ingredient inventory, upgrade levels, and battle progress (Stage 1). */
+function migrateV1ToV2(old: unknown, _now: number): unknown {
+  const save = old as {
+    schemaVersion: 1;
+    seed: string;
+    createdAt: number;
+    lastSavedAt: number;
+    resources: { gold: number };
+  };
+  return {
+    schemaVersion: 2,
+    seed: save.seed,
+    createdAt: save.createdAt,
+    lastSavedAt: save.lastSavedAt,
+    resources: { gold: save.resources.gold, ash: 0, ingredients: {} },
+    upgradeLevels: {},
+    currentStageId: 1,
+  };
+}
+
+/** Adds the potion inventory and equip slots (Stage 1 paper-doll, minimal version). */
+function migrateV2ToV3(old: unknown, _now: number): unknown {
+  const save = old as {
+    schemaVersion: 2;
+    seed: string;
+    createdAt: number;
+    lastSavedAt: number;
+    resources: { gold: number; ash: number; ingredients: Record<string, number> };
+    upgradeLevels: Record<string, number>;
+    currentStageId: number;
+  };
+  return {
+    ...save,
+    schemaVersion: 3,
+    potions: [],
+    nextPotionId: 1,
+  };
+}
+
 /** Registry of migrations, keyed by the version they migrate *from*. */
 const migrations: Record<number, Migration> = {
   0: migrateV0ToV1,
+  1: migrateV1ToV2,
+  2: migrateV2ToV3,
 };
 
 function detectVersion(raw: unknown): number {

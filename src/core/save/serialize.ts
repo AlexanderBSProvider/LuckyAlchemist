@@ -1,13 +1,13 @@
-import type { SaveDataV1 } from "./schema";
-import { saveDataV1Schema } from "./schema";
+import type { SaveData } from "./schema";
+import { saveDataV3Schema } from "./schema";
 import { migrateToCurrent } from "./migrations";
 
-export function serializeSave(data: SaveDataV1): string {
+export function serializeSave(data: SaveData): string {
   return JSON.stringify(data);
 }
 
 export type DeserializeResult =
-  | { ok: true; data: SaveDataV1 }
+  | { ok: true; data: SaveData }
   | { ok: false; reason: "invalid-json" | "invalid-shape"; message: string };
 
 /**
@@ -41,7 +41,7 @@ export function deserializeSave(raw: string, now: number): DeserializeResult {
     };
   }
 
-  const result = saveDataV1Schema.safeParse(migrated);
+  const result = saveDataV3Schema.safeParse(migrated);
   if (!result.success) {
     return { ok: false, reason: "invalid-shape", message: result.error.message };
   }
