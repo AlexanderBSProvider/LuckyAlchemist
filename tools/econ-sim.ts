@@ -26,6 +26,7 @@ import {
   upgrades,
   ashSiftConfig,
   mutationConfig,
+  battleConfig,
 } from "../src/data";
 import type { GradeId } from "../src/data/schemas";
 
@@ -35,6 +36,9 @@ const BREWS_PER_HOUR = 6;
 const DISTILL_PUSHES = 2; // fixed strategy: always push twice, then bank whatever survives
 const SIFT_ASH_THRESHOLD = 5;
 const STUCK_HOURS_THRESHOLD = 5; // no stage advance for this many consecutive hours = stuck
+// Auto-battle cadence comes from data (battle.json), the same value the game's driver in
+// main.ts uses — the sim must roll as many fight attempts as the real game does.
+const FIGHTS_PER_HOUR = Math.max(1, Math.round(3600 / battleConfig.autoIntervalSeconds));
 
 interface PlayerState {
   gold: number;
@@ -138,7 +142,7 @@ function runSession(seed: string): SessionResult {
   for (let hour = 1; hour <= SIMULATED_HOURS; hour++) {
     const stageBefore = state.stageIndex;
 
-    runFight(battleRng, state);
+    for (let f = 0; f < FIGHTS_PER_HOUR; f++) runFight(battleRng, state);
     for (let i = 0; i < BREWS_PER_HOUR; i++) runBrewAndDistill(brewRng, state);
     runSifting(siftRng, state);
     runShopping(state);
@@ -174,7 +178,8 @@ function main(): void {
   const avgStage = stageIndexTotal / PLAYER_COUNT;
 
   console.log(
-    `[econ-sim] players simulated: ${String(PLAYER_COUNT)}, horizon: ${String(SIMULATED_HOURS)}h`,
+    `[econ-sim] players simulated: ${String(PLAYER_COUNT)}, horizon: ${String(SIMULATED_HOURS)}h, ` +
+      `auto-battle: ${String(FIGHTS_PER_HOUR)} fights/h`,
   );
   console.log(
     `[econ-sim] stuck (no stage advance for ${String(STUCK_HOURS_THRESHOLD)}h+): ` +
