@@ -6,6 +6,7 @@ import stagesJson from "./stages.json";
 import upgradesJson from "./upgrades.json";
 import ashSiftJson from "./ash-sift.json";
 import mutationsJson from "./mutations.json";
+import battleJson from "./battle.json";
 import {
   symbolsSchema,
   ringWeightsSchema,
@@ -15,6 +16,7 @@ import {
   upgradesSchema,
   ashSiftConfigSchema,
   mutationConfigSchema,
+  battleConfigSchema,
   gradeIdSchema,
 } from "./schemas";
 
@@ -32,6 +34,7 @@ export const stages = stagesSchema.parse(stagesJson);
 export const upgrades = upgradesSchema.parse(upgradesJson);
 export const ashSiftConfig = ashSiftConfigSchema.parse(ashSiftJson);
 export const mutationConfig = mutationConfigSchema.parse(mutationsJson);
+export const battleConfig = battleConfigSchema.parse(battleJson);
 
 // Zod validates each file's own shape; these checks catch the one thing it can't see —
 // an id in one file that no longer exists in another (e.g. a renamed symbol or ingredient).

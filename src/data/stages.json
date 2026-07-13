@@ -1,12 +1,12 @@
 [
   { "id": 1, "difficulty": 8, "rewardGold": 10, "rewardIngredientId": "dry-tinder", "rewardIngredientAmount": 2 },
-  { "id": 2, "difficulty": 12, "rewardGold": 15, "rewardIngredientId": "clay-shard", "rewardIngredientAmount": 3 },
-  { "id": 3, "difficulty": 18, "rewardGold": 22, "rewardIngredientId": "dry-tinder", "rewardIngredientAmount": 3 },
-  { "id": 4, "difficulty": 26, "rewardGold": 32, "rewardIngredientId": "clay-shard", "rewardIngredientAmount": 4 },
-  { "id": 5, "difficulty": 38, "rewardGold": 46, "rewardIngredientId": "dry-tinder", "rewardIngredientAmount": 4 },
-  { "id": 6, "difficulty": 55, "rewardGold": 66, "rewardIngredientId": "clay-shard", "rewardIngredientAmount": 5 },
-  { "id": 7, "difficulty": 79, "rewardGold": 95, "rewardIngredientId": "dry-tinder", "rewardIngredientAmount": 5 },
-  { "id": 8, "difficulty": 114, "rewardGold": 137, "rewardIngredientId": "clay-shard", "rewardIngredientAmount": 6 },
-  { "id": 9, "difficulty": 164, "rewardGold": 197, "rewardIngredientId": "dry-tinder", "rewardIngredientAmount": 6 },
-  { "id": 10, "difficulty": 236, "rewardGold": 283, "rewardIngredientId": "clay-shard", "rewardIngredientAmount": 7 }
+  { "id": 2, "difficulty": 20, "rewardGold": 15, "rewardIngredientId": "clay-shard", "rewardIngredientAmount": 3 },
+  { "id": 3, "difficulty": 60, "rewardGold": 22, "rewardIngredientId": "dry-tinder", "rewardIngredientAmount": 3 },
+  { "id": 4, "difficulty": 2500, "rewardGold": 32, "rewardIngredientId": "clay-shard", "rewardIngredientAmount": 4 },
+  { "id": 5, "difficulty": 10000, "rewardGold": 46, "rewardIngredientId": "dry-tinder", "rewardIngredientAmount": 4 },
+  { "id": 6, "difficulty": 60000, "rewardGold": 66, "rewardIngredientId": "clay-shard", "rewardIngredientAmount": 5 },
+  { "id": 7, "difficulty": 150000, "rewardGold": 95, "rewardIngredientId": "dry-tinder", "rewardIngredientAmount": 5 },
+  { "id": 8, "difficulty": 300000, "rewardGold": 137, "rewardIngredientId": "clay-shard", "rewardIngredientAmount": 6 },
+  { "id": 9, "difficulty": 550000, "rewardGold": 197, "rewardIngredientId": "dry-tinder", "rewardIngredientAmount": 6 },
+  { "id": 10, "difficulty": 1000000, "rewardGold": 283, "rewardIngredientId": "clay-shard", "rewardIngredientAmount": 7 }
 ]

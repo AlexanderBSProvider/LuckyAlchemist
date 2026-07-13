@@ -96,6 +96,12 @@ export const mutationConfigSchema = z.object({
 });
 export type MutationConfig = z.infer<typeof mutationConfigSchema>;
 
+export const battleConfigSchema = z.object({
+  /** Seconds between automatic fight attempts against the current stage (autobattler). */
+  autoIntervalSeconds: z.number().positive(),
+});
+export type BattleConfig = z.infer<typeof battleConfigSchema>;
+
 export const ashSiftConfigSchema = z.object({
   ingredientId: z.string().min(1),
   /** Guaranteed base ingredients per unit of ash — the economy's hard floor. */
