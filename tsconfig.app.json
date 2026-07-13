@@ -11,6 +11,10 @@
     "isolatedModules": true,
     "moduleDetection": "force",
     "noEmit": true,
+    // pixi.js's own .d.ts (AbstractBitmapFont) isn't exactOptionalPropertyTypes-clean —
+    // this keeps our code fully checked without failing the build on a third-party
+    // package's internal type declarations (standard fix for this class of issue).
+    "skipLibCheck": true,
 
     /* Strictness — every option that catches real bugs, on. */
     "strict": true,
