@@ -13,12 +13,13 @@ import {
 } from "../data";
 import { glyphFor } from "../data/glyphs";
 import type { GradeId, RarityTier } from "../data/schemas";
-import { performBrew, performDistill } from "../store/actions";
-import { buyUpgrade, equipPotion, siftAshCommand, unequipPotion } from "../store/commands";
+import { performBrew, performDistill, performSift } from "../store/actions";
+import { buyUpgrade, equipPotion, unequipPotion } from "../store/commands";
 import type { EventBus, GameEventMap } from "../store/events";
 import type { GameState } from "../store/game-state";
 import { playerPower } from "../store/selectors";
 import type { Store } from "../store/store";
+import { createAshScratch } from "./ash-scratch";
 
 export interface LabPanelDeps {
   store: Store<GameState>;
@@ -29,19 +30,19 @@ export interface LabPanelDeps {
 }
 
 const RARITY_LABELS: Record<RarityTier, string> = {
-  common: "звичайний",
-  uncommon: "незвичайний",
-  rare: "рідкісний",
-  epic: "епічний",
-  legendary: "легендарний",
-  quintessence: "квінтесенційний",
+  common: "common",
+  uncommon: "uncommon",
+  rare: "rare",
+  epic: "epic",
+  legendary: "legendary",
+  quintessence: "quintessence",
 };
 
 const GRADE_LABELS: Record<GradeId, string> = {
-  tincture: "настойка",
-  elixir: "еліксир",
-  "grand-elixir": "великий еліксир",
-  quintessence: "квінтесенція",
+  tincture: "tincture",
+  elixir: "elixir",
+  "grand-elixir": "grand elixir",
+  quintessence: "quintessence",
 };
 
 function ingredientLabel(id: string): string {
@@ -102,10 +103,20 @@ const TAB_IDS = ["brew", "potions", "lab"] as const;
 type TabId = (typeof TAB_IDS)[number];
 
 const TAB_LABELS: Record<TabId, string> = {
-  brew: "Казан",
-  potions: "Зілля",
-  lab: "Лабораторія",
+  brew: "Brew",
+  potions: "Potions",
+  lab: "Lab",
 };
+
+/** Tab icons — engraved unicode glyphs, same no-asset convention as data/glyphs.ts. */
+const TAB_ICONS: Record<TabId, string> = {
+  brew: "⚗",
+  potions: "🜛",
+  lab: "🜍",
+};
+
+/** The alchemist's own face glyph, mirrored from render/battle-scene.ts's ALCHEMIST_GLYPH. */
+const HERO_GLYPH = "🧙";
 
 export interface LabPanelHandle {
   /** Screen region `render/battle-scene.ts` draws the autobattler arena into. Exposed so
@@ -149,14 +160,24 @@ export function mountLabPanel(container: HTMLElement, deps: LabPanelDeps): LabPa
 
   const hud = el("div", "hud");
   const goldChip = el("span", "hud__res hud__res--gold");
-  goldChip.title = "Золото";
+  goldChip.title = "Gold";
   const goldText = makeOutlinedText();
   goldChip.append(goldText.holder);
   const ashChip = el("span", "hud__res hud__res--ash");
-  ashChip.title = "Попіл";
+  ashChip.title = "Ash";
   const ashText = makeOutlinedText();
   ashChip.append(ashText.holder);
   hud.append(goldChip, ashChip);
+
+  // Hero medallion (top-left of the scene, like the reference's avatar+level): the
+  // alchemist's face plus a live power readout, updated in renderStage.
+  const hero = el("div", "hero-badge");
+  const heroFace = el("span", "hero-badge__face", HERO_GLYPH);
+  const heroMeta = el("div", "hero-badge__meta");
+  const heroName = el("span", "hero-badge__name", "Alchemist");
+  const heroPower = el("span", "hero-badge__power");
+  heroMeta.append(heroName, heroPower);
+  hero.append(heroFace, heroMeta);
 
   // --- Battle scene (top, always visible) -----------------------------------------------
   // `battleAnchor` is an empty box: `render/battle-scene.ts` draws the arena into its
@@ -164,6 +185,10 @@ export function mountLabPanel(container: HTMLElement, deps: LabPanelDeps): LabPa
   // stage progress, win-chance meter, and the victory banner.
   const scene = el("section", "scene");
   const battleAnchor = el("div", "scene__battle");
+  // Top overlay bar: hero medallion (left) balanced against the currency chips (right),
+  // both floating over the Three.js arena like the reference's HUD.
+  const sceneTopBar = el("div", "scene__topbar");
+  sceneTopBar.append(hero, hud);
   const sceneHead = el("div", "scene__head");
   const stageLine = el("p", "scene__stage");
   const stageTrack = el("div", "stage-track");
@@ -176,22 +201,27 @@ export function mountLabPanel(container: HTMLElement, deps: LabPanelDeps): LabPa
   const rewardLine = el("p", "scene__reward");
   sceneFoot.append(meter, chanceLine, rewardLine);
   const battleResultBox = el("div", "scene__result");
-  scene.append(battleAnchor, sceneHead, sceneFoot, battleResultBox);
+  scene.append(battleAnchor, sceneTopBar, sceneHead, sceneFoot, battleResultBox);
 
   // --- Brew panel (cauldron lives here, like the reference's anvil) ---------------------
-  const brewPanel = el("div", "panel");
+  // The rolls row and result banner overlay the cauldron (absolute children) rather than
+  // sitting as flow blocks — that way they reserve no vertical space when idle, so the brew
+  // tab fits small screens without scrolling. The cauldron canvas is drawn behind all DOM
+  // (fixed background layer), so these overlays render on top of it.
+  const brewPanel = el("div", "panel panel--brew");
   const cauldronAnchor = el("div", "brew-cauldron");
   const rollsRow = el("div", "scene__rolls");
   const bannerBox = el("div", "scene__banner");
+  cauldronAnchor.append(rollsRow, bannerBox);
   const brewHint = el(
     "p",
     "panel__hint",
-    "Обери інгредієнти: база живить вогонь, добавки зміщують ваги символів.",
+    "The base feeds the fire; additives shift the symbol weights.",
   );
   const brewList = el("ul", "chips");
-  const brewButton = el("button", "cta", "Варити");
+  const brewButton = el("button", "cta", "Brew");
   brewButton.type = "button";
-  brewPanel.append(cauldronAnchor, rollsRow, bannerBox, brewHint, brewList, brewButton);
+  brewPanel.append(cauldronAnchor, brewHint, brewList, brewButton);
 
   // --- Potions panel ---------------------------------------------------------------
   const potionsPanel = el("div", "panel");
@@ -205,10 +235,21 @@ export function mountLabPanel(container: HTMLElement, deps: LabPanelDeps): LabPa
   const shopList = el("ul", "shop-list");
   const siftRow = el("div", "sift-row");
   const siftInfo = el("p", "panel__hint");
-  const siftButton = el("button", "btn-small", "Просіяти попіл");
+  const siftButton = el("button", "btn-small", "Sift ash");
   siftButton.type = "button";
   siftRow.append(siftInfo, siftButton);
-  labPanel.append(shopList, siftRow);
+  const siftCardSlot = el("div", "");
+  labPanel.append(shopList, siftRow, siftCardSlot);
+
+  // `renderSift` (defined below, after `ashScratch` is created) is the real callback —
+  // this indirection just lets the canvas be built here, next to its trigger button, without
+  // reordering the whole render-function section.
+  let notifySiftSettled = (): void => {
+    /* replaced once renderAll exists */
+  };
+  const ashScratch = createAshScratch(siftCardSlot, () => {
+    notifySiftSettled();
+  });
 
   // --- Tab bar -----------------------------------------------------------------------
   const panels: Record<TabId, HTMLElement> = {
@@ -219,8 +260,12 @@ export function mountLabPanel(container: HTMLElement, deps: LabPanelDeps): LabPa
   const tabsNav = el("nav", "tabs");
   const tabButtons = {} as Record<TabId, HTMLButtonElement>;
   for (const id of TAB_IDS) {
-    const tabButton = el("button", "tabs__btn", TAB_LABELS[id]);
+    const tabButton = el("button", "tabs__btn");
     tabButton.type = "button";
+    tabButton.append(
+      el("span", "tabs__icon", TAB_ICONS[id]),
+      el("span", "tabs__label", TAB_LABELS[id]),
+    );
     tabButton.addEventListener("click", () => {
       setTab(id);
     });
@@ -235,7 +280,9 @@ export function mountLabPanel(container: HTMLElement, deps: LabPanelDeps): LabPa
   };
   setTab("brew");
 
-  root.append(scene, hud, tabsNav, brewPanel, potionsPanel, labPanel);
+  // hud now lives inside `scene` (top overlay); the deck below the scene is just the tab
+  // bar and the active panel.
+  root.append(scene, tabsNav, brewPanel, potionsPanel, labPanel);
   container.append(root);
 
   // --- Renders ------------------------------------------------------------------------
@@ -245,7 +292,7 @@ export function mountLabPanel(container: HTMLElement, deps: LabPanelDeps): LabPa
   const renderResources = (state: GameState): void => {
     const { gold, ash } = state.resources;
     goldText.set(`☉ ${String(gold)}`);
-    ashText.set(`Попіл ${String(ash)}`);
+    ashText.set(`Ash ${String(ash)}`);
     if (prevGold !== null && gold !== prevGold) pulse(goldChip);
     if (prevAsh !== null && ash !== prevAsh) pulse(ashChip);
     prevGold = gold;
@@ -270,21 +317,22 @@ export function mountLabPanel(container: HTMLElement, deps: LabPanelDeps): LabPa
     renderStageTrack(state);
     const stage = stages.find((candidate) => candidate.id === state.currentStageId);
     const power = playerPower(state);
+    heroPower.textContent = `⚔ ${String(power)}`;
     if (!stage) {
-      stageLine.textContent = "Усі стейджі зачищено";
+      stageLine.textContent = "All battles cleared";
       meterFill.style.width = "100%";
-      chanceLine.textContent = `Сила: ${String(power)}`;
+      chanceLine.textContent = `Power: ${String(power)}`;
       rewardLine.textContent = "";
       return;
     }
     // Under auto-battle the percentage is usually tiny at a wall — the meter reads as
     // "how close your power is to this foe", which is the honest signal to show.
     const winChance = Math.round((100 * power) / (power + stage.difficulty));
-    stageLine.textContent = `Стейдж ${String(stage.id)} / ${String(stages.length)}`;
+    stageLine.textContent = `Battle 1-${String(stage.id)}`;
     meterFill.style.width = `${String(Math.max(2, winChance))}%`;
-    chanceLine.textContent = `Сила ${String(power)} проти ${String(stage.difficulty)}`;
+    chanceLine.textContent = `Power ${String(power)} vs ${String(stage.difficulty)}`;
     rewardLine.textContent =
-      `Нагорода: ${String(stage.rewardGold)} ☉ + ${String(stage.rewardIngredientAmount)} ` +
+      `Reward: ${String(stage.rewardGold)} ☉ + ${String(stage.rewardIngredientAmount)} ` +
       ingredientLabel(stage.rewardIngredientId);
   };
 
@@ -314,7 +362,7 @@ export function mountLabPanel(container: HTMLElement, deps: LabPanelDeps): LabPa
 
   const renderPotions = (state: GameState): void => {
     const equipped = state.potions.filter((potion) => potion.equipped);
-    slotsHint.textContent = `Мутації: ${String(equipped.length)}/${String(mutationConfig.maxEquippedSlots)}`;
+    slotsHint.textContent = `Mutations: ${String(equipped.length)}/${String(mutationConfig.maxEquippedSlots)}`;
 
     slotsRow.replaceChildren(
       ...Array.from({ length: mutationConfig.maxEquippedSlots }, (_, i) => {
@@ -332,7 +380,7 @@ export function mountLabPanel(container: HTMLElement, deps: LabPanelDeps): LabPa
 
     if (state.potions.length === 0) {
       potionsList.replaceChildren(
-        el("li", "potions-list__empty", "Полиця порожня — звари перше зілля в казані."),
+        el("li", "potions-list__empty", "The shelf is empty — brew your first potion in the cauldron."),
       );
       return;
     }
@@ -350,14 +398,18 @@ export function mountLabPanel(container: HTMLElement, deps: LabPanelDeps): LabPa
         const grade = el("span", "potion__grade", GRADE_LABELS[potion.grade]);
         info.append(name, grade);
 
-        const distillButton = el("button", "btn-small", "Дистилювати");
+        const distillButton = el("button", "btn-small", "Distill");
         distillButton.type = "button";
         distillButton.disabled = potion.grade === "quintessence";
         distillButton.addEventListener("click", () => {
           performDistill(store, events, distillRng, distillationStages, potion.id);
         });
 
-        const equipButton = el("button", "btn-small", potion.equipped ? "Зняти" : "Екіпірувати");
+        const equipButton = el(
+          "button",
+          `btn-small${potion.equipped ? "" : " btn-primary"}`,
+          potion.equipped ? "Unequip" : "Equip",
+        );
         equipButton.type = "button";
         equipButton.disabled =
           !potion.equipped && equipped.length >= mutationConfig.maxEquippedSlots;
@@ -382,9 +434,9 @@ export function mountLabPanel(container: HTMLElement, deps: LabPanelDeps): LabPa
         const cost = upgradeCost(upgrade, level);
         const item = el("li", "shop-row");
         const name = el("span", "shop-row__name", upgrade.label);
-        const levelBadge = el("span", "shop-row__level", `рів. ${String(level)}`);
+        const levelBadge = el("span", "shop-row__level", `lv. ${String(level)}`);
         const costTag = el("span", "shop-row__cost", `☉ ${String(cost)}`);
-        const buyButton = el("button", "btn-small", "Купити");
+        const buyButton = el("button", "btn-small btn-primary", "Buy");
         buyButton.type = "button";
         buyButton.disabled = state.resources.gold < cost;
         buyButton.addEventListener("click", () => {
@@ -397,8 +449,8 @@ export function mountLabPanel(container: HTMLElement, deps: LabPanelDeps): LabPa
   };
 
   const renderSift = (state: GameState): void => {
-    siftInfo.textContent = `Попіл на просіювання: ${String(state.resources.ash)}`;
-    siftButton.disabled = state.resources.ash <= 0;
+    siftInfo.textContent = `Ash to sift: ${String(state.resources.ash)}`;
+    siftButton.disabled = state.resources.ash <= 0 || ashScratch.phase() !== "empty";
   };
 
   const renderAll = (): void => {
@@ -411,6 +463,7 @@ export function mountLabPanel(container: HTMLElement, deps: LabPanelDeps): LabPa
     renderSift(state);
   };
   renderAll();
+  notifySiftSettled = renderAll;
 
   const unsubscribeResources = store.subscribe((state) => state.resources, renderAll);
   const unsubscribeStage = store.subscribe((state) => state.currentStageId, renderAll);
@@ -461,13 +514,13 @@ export function mountLabPanel(container: HTMLElement, deps: LabPanelDeps): LabPa
         ? el(
             "p",
             `scene__banner-text rar-${outcome.rarity}`,
-            `Зварено: ${RARITY_LABELS[outcome.rarity]} «${symbolLabel(outcome.symbolId)}»` +
-              (outcome.triple ? " — потрійний збіг!" : ""),
+            `Brewed: ${RARITY_LABELS[outcome.rarity]} "${symbolLabel(outcome.symbolId)}"` +
+              (outcome.triple ? " — triple match!" : ""),
           )
         : el(
             "p",
             "scene__banner-text scene__banner-text--fail",
-            "Збігу немає — інгредієнти згоріли в попіл.",
+            "No match — ingredients burned to ash.",
           );
     banner.addEventListener(
       "animationend",
@@ -483,7 +536,7 @@ export function mountLabPanel(container: HTMLElement, deps: LabPanelDeps): LabPa
   // --- Victory banner over the battle scene ----------------------------------------------
   // The fight itself is drawn by `render/battle-scene.ts`; the DOM only floats the reward
   // text on a win. Losses show no banner — under auto-battle they repeat every few seconds
-  // at a power wall, and a "Поразка..." toast on each would be pure noise.
+  // at a power wall, and a "Defeat..." toast on each would be pure noise.
   const showVictoryBanner = (reward: {
     gold: number;
     ingredientId: string;
@@ -532,10 +585,15 @@ export function mountLabPanel(container: HTMLElement, deps: LabPanelDeps): LabPa
     performBrew(store, events, brewRng, { rings, symbols, ingredients }, { ingredientIds });
   });
 
+  const unsubscribeAshSifted = events.on("ash:sifted", ({ ingredientId, amount }) => {
+    ashScratch.arm({ label: ingredientLabel(ingredientId), amount });
+    renderAll();
+  });
+
   siftButton.addEventListener("click", () => {
     const ash = store.getState().resources.ash;
-    if (ash <= 0) return;
-    store.dispatch(siftAshCommand(siftRng, ashSiftConfig, ash));
+    if (ash <= 0 || ashScratch.phase() !== "empty") return;
+    performSift(store, events, siftRng, ashSiftConfig, ash);
   });
 
   return {
@@ -549,6 +607,8 @@ export function mountLabPanel(container: HTMLElement, deps: LabPanelDeps): LabPa
       unsubscribeBattleWon();
       unsubscribeBrewSuccess();
       unsubscribeBrewFail();
+      unsubscribeAshSifted();
+      ashScratch.destroy();
       root.remove();
     },
   };

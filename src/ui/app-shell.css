@@ -1,32 +1,56 @@
 /*
  * Styles colocated with app-shell.ts — the pattern components follow from here on: each
- * component owns its own CSS file and imports it, instead of one growing global stylesheet.
- * Design tokens (colors, fonts, spacing) still come from styles/grimoire.css.
+ * component owns its own CSS file and imports it. Design tokens (colors, fonts, spacing)
+ * come from styles/grimoire.css.
  */
 
+/* Slim top strip above the scene: game title + save control. `flex: 0 0 auto` pins its
+ * height so lab-panel gets all remaining space; `nowrap` + small type keep it one row. */
 .app-shell {
+  flex: 0 0 auto;
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
-  gap: var(--space-3);
-  flex-wrap: wrap;
-  padding: var(--space-3) 0;
-  border-bottom: var(--border-subtle);
+  gap: var(--space-2);
+  flex-wrap: nowrap;
+  padding: var(--space-1) var(--space-1) 0;
 }
 
 .app-shell__title {
-  font-size: 1.75rem;
+  flex: 0 1 auto;
+  min-width: 0;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1.15rem;
+  color: var(--color-ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .app-shell__side {
   display: flex;
-  align-items: baseline;
-  gap: var(--space-3);
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  flex: 1 1 auto;
+  justify-content: flex-end;
 }
 
 .app-shell__status {
   color: var(--color-ink-dim);
-  font-style: italic;
+  font-weight: 600;
+  font-size: 0.72rem;
   margin: 0;
-  min-height: 1.5em;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* Compact save button so the header stays one slim line. */
+.app-shell .app-shell__save {
+  font-size: 0.78rem;
+  padding: var(--space-1) var(--space-3);
+  white-space: nowrap;
 }

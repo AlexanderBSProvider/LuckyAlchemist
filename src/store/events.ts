@@ -31,6 +31,7 @@ export type GameEventMap = {
     rewardIngredientAmount: number;
   };
   "battle:lost": { stageId: number };
+  "ash:sifted": { ingredientId: string; amount: number };
 };
 
 export interface EventBus<EventMap extends Record<string, unknown>> {

@@ -2,6 +2,7 @@ import {
   CircleGeometry,
   Group,
   Mesh,
+  PlaneGeometry,
   RingGeometry,
   Sprite,
   type MeshBasicMaterial,
@@ -27,12 +28,15 @@ export interface BattleSceneDeps {
   anchor: HTMLElement;
 }
 
-/* Grimoire palette (mirrors src/styles/grimoire.css tokens). */
-const COLOR_GOLD = 0xc9a227;
-const COLOR_EMERALD = 0x3fa372;
-const COLOR_INK = 0xf2e9d8;
-const COLOR_DANGER = 0xa3402f;
-const COLOR_FLOOR = 0x1a1510;
+/* Bright cartoon "Forge" palette (mirrors src/styles/grimoire.css tokens): a saturated
+ * grass field with a brown battle lane, warm sparkles, and blue/red combatant rings. */
+const COLOR_SPARK = 0xffd85e; // drifting motes / sun sparkle
+const COLOR_GRASS = 0x6cbf43; // field + foliage
+const COLOR_INK = 0xf2e9d8; // fighter glyph label (emoji keep their own colors)
+const COLOR_DANGER = 0xe5533c; // foe ring + clash tint
+const COLOR_HERO = 0x2f8bef; // hero ring (candy blue)
+const COLOR_DIRT = 0x9c6b3f; // battle lane + tree trunks / rocks
+const COLOR_DIRT_DARK = 0x7d5330;
 const COLOR_WHITE = 0xffffff;
 const COLOR_SHADOW = 0x000000;
 
@@ -135,10 +139,10 @@ interface Ember {
 }
 
 /**
- * The autobattler arena — the game's persistent top scene, in the Grimoire visual
- * language: an engraved stone ring for a floor, gold rune-circles under the fighters,
- * ember motes drifting up, and glyph fighters. Fights resolve in the store on the
- * auto-battle timer (`main.ts`); this scene only replays `battle:won`/`battle:lost`
+ * The autobattler arena — the game's persistent top scene, in the bright cartoon "Forge"
+ * visual language: a grass meadow with a brown battle lane, marker circles under the
+ * fighters, sun-mote sparkles drifting up, and glyph fighters. Fights resolve in the store
+ * on the auto-battle timer (`main.ts`); this scene only replays `battle:won`/`battle:lost`
  * outcomes it hears on the event bus, never rolls anything itself.
  */
 export function mountBattleScene(scene: Scene, deps: BattleSceneDeps): () => void {
@@ -146,19 +150,81 @@ export function mountBattleScene(scene: Scene, deps: BattleSceneDeps): () => voi
 
   const sceneRoot = new Group();
 
-  // --- Arena floor: layered ellipses read as an engraved summoning ground -------------
-  const floor = new Group();
-  const floorShadow = buildEllipse(floor, 1, 0.32, 0x000000, 0.5);
-  const floorBase = buildEllipse(floor, 1, 0.3, COLOR_FLOOR, 1);
-  const floorBaseEdge = buildEllipse(floor, 1, 0.3, COLOR_GOLD, 0.4, { innerFraction: 0.97 });
-  const floorMist = buildEllipse(floor, 0.72, 0.2, COLOR_EMERALD, 0.08);
+  // --- Background scenery: a bright top-down meadow with a battle lane -----------------
+  // The reference's outdoor field, in our flat-shape language: a full grass plane, a
+  // slightly darker foreground strip for depth, a brown dirt lane the fighters stand on,
+  // and silhouette tree/rock props. Built first so their renderOrder stays below the
+  // floor/fighters (drawn behind).
+  const backdrop = new Group();
+  const grassFieldMaterial = flatColorMaterial(COLOR_GRASS, 1);
+  const grassField = new Mesh(new PlaneGeometry(1, 1), grassFieldMaterial);
+  grassField.renderOrder = nextOrder();
+  backdrop.add(grassField);
 
-  // --- Rune circles under each fighter --------------------------------------------------
+  // Darker grass strip along the very bottom = a hint of foreground depth.
+  const grassNearMaterial = flatColorMaterial(COLOR_GRASS, 1);
+  grassNearMaterial.color.multiplyScalar(0.82);
+  const grassNear = new Mesh(new PlaneGeometry(1, 1), grassNearMaterial);
+  grassNear.renderOrder = nextOrder();
+  backdrop.add(grassNear);
+
+  // Brown battle lane across the middle — where the two fighters meet.
+  const laneMaterial = flatColorMaterial(COLOR_DIRT, 1);
+  const lane = new Mesh(new PlaneGeometry(1, 1), laneMaterial);
+  lane.renderOrder = nextOrder();
+  backdrop.add(lane);
+
+  const buildTreeProp = (): Group => {
+    const group = new Group();
+    const trunk = new Mesh(new PlaneGeometry(1, 1), flatColorMaterial(COLOR_DIRT, 0.95));
+    trunk.renderOrder = nextOrder();
+    trunk.scale.set(0.1, 0.45, 1);
+    trunk.position.set(0, -0.22, 0); // up from the base (y-down world, so negative = up)
+    const foliage = new Mesh(new CircleGeometry(1, 24), flatColorMaterial(COLOR_GRASS, 1));
+    foliage.renderOrder = nextOrder();
+    foliage.material.color.multiplyScalar(0.88); // a touch darker than the field so it reads
+    foliage.scale.set(0.42, 0.42, 1);
+    foliage.position.set(0, -0.55, 0);
+    group.add(trunk, foliage);
+    return group;
+  };
+
+  const buildRockProp = (): Group => {
+    const group = new Group();
+    const rock = new Mesh(new CircleGeometry(1, 20), flatColorMaterial(0x9aa3ad, 0.95));
+    rock.renderOrder = nextOrder();
+    rock.scale.set(0.45, 0.28, 1);
+    rock.position.set(0, -0.14, 0);
+    group.add(rock);
+    return group;
+  };
+
+  interface BackdropProp {
+    readonly group: Group;
+    readonly xFraction: number;
+    readonly scale: number;
+  }
+  const backdropProps: BackdropProp[] = [
+    { group: buildTreeProp(), xFraction: 0.1, scale: 1 },
+    { group: buildTreeProp(), xFraction: 0.9, scale: 1.15 },
+    { group: buildRockProp(), xFraction: 0.72, scale: 0.9 },
+  ];
+  for (const prop of backdropProps) backdrop.add(prop.group);
+  sceneRoot.add(backdrop);
+
+  // --- Arena floor: a soft trodden patch under the fighters ----------------------------
+  const floor = new Group();
+  const floorShadow = buildEllipse(floor, 1, 0.3, COLOR_SHADOW, 0.16);
+  const floorBase = buildEllipse(floor, 0.9, 0.26, COLOR_DIRT_DARK, 0.4);
+  const floorBaseEdge = buildEllipse(floor, 0.9, 0.26, COLOR_WHITE, 0.06, { innerFraction: 0.95 });
+  const floorMist = buildEllipse(floor, 0.6, 0.16, COLOR_DIRT, 0.18);
+
+  // --- Marker circles under each fighter ------------------------------------------------
   const heroCircleGroup = new Group();
-  const heroCircleOuter = buildEllipse(heroCircleGroup, 1, 0.3, COLOR_EMERALD, 0.5, {
+  const heroCircleOuter = buildEllipse(heroCircleGroup, 1, 0.3, COLOR_HERO, 0.55, {
     innerFraction: 0.9,
   });
-  const heroCircleInner = buildEllipse(heroCircleGroup, 0.72, 0.216, COLOR_EMERALD, 0.3, {
+  const heroCircleInner = buildEllipse(heroCircleGroup, 0.72, 0.216, COLOR_HERO, 0.32, {
     innerFraction: 0.94,
   });
   const foeCircleGroup = new Group();
@@ -190,7 +256,7 @@ export function mountBattleScene(scene: Scene, deps: BattleSceneDeps): () => voi
 
   const spawnEmber = (now: number): void => {
     if (embers.length >= EMBER_MAX_COUNT) return;
-    const material = flatColorMaterial(COLOR_GOLD, 0.55);
+    const material = flatColorMaterial(COLOR_SPARK, 0.7);
     const mesh = new Mesh(new CircleGeometry(1, 12), material);
     mesh.renderOrder = nextOrder();
     emberLayer.add(mesh);
@@ -274,6 +340,20 @@ export function mountBattleScene(scene: Scene, deps: BattleSceneDeps): () => voi
     const centerX = rect.left + w / 2;
     const groundY = rect.top + h * 0.68;
     const fighterScale = Math.min(h * 0.0042, 1.35);
+
+    // Meadow: a full grass plane, a darker foreground strip, and the dirt battle lane the
+    // fighters stand on; then silhouette props rooted near the horizon.
+    grassField.position.set(centerX, rect.top + h * 0.5, 0);
+    grassField.scale.set(w, h, 1);
+    grassNear.position.set(centerX, rect.top + h * 0.92, 0);
+    grassNear.scale.set(w, h * 0.18, 1);
+    lane.position.set(centerX, groundY, 0);
+    lane.scale.set(w, h * 0.22, 1);
+    for (const prop of backdropProps) {
+      const propScale = h * 0.46 * prop.scale;
+      prop.group.position.set(rect.left + prop.xFraction * w, groundY - h * 0.04, 0);
+      prop.group.scale.set(propScale, propScale, 1);
+    }
 
     // Floor spans most of the anchor width.
     floor.position.set(centerX, groundY + h * 0.06, 0);

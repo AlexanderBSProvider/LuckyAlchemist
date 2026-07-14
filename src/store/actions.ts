@@ -1,8 +1,8 @@
 import type { BrewRecipe } from "../core/brewing";
 import type { Rng } from "../core/rng";
-import type { DistillationStage, Stage } from "../data/schemas";
+import type { AshSiftConfig, DistillationStage, Stage } from "../data/schemas";
 import type { BrewData } from "./commands";
-import { brewCommand, distillPotion, fightStage } from "./commands";
+import { brewCommand, distillPotion, fightStage, siftAshCommand } from "./commands";
 import type { EventBus, GameEventMap } from "./events";
 import type { GameState } from "./game-state";
 import type { Store } from "./store";
@@ -94,4 +94,23 @@ export function performFight(
   }
 
   events.emit("battle:lost", { stageId: stage.id });
+}
+
+export function performSift(
+  store: Store<GameState>,
+  events: EventBus<GameEventMap>,
+  rng: Rng,
+  config: AshSiftConfig,
+  amount: number,
+): void {
+  const before = store.getState();
+  store.dispatch(siftAshCommand(rng, config, amount));
+  const after = store.getState();
+
+  const gained =
+    (after.resources.ingredients[config.ingredientId] ?? 0) -
+    (before.resources.ingredients[config.ingredientId] ?? 0);
+  if (gained > 0) {
+    events.emit("ash:sifted", { ingredientId: config.ingredientId, amount: gained });
+  }
 }

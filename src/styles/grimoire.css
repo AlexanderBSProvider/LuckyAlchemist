@@ -1,26 +1,48 @@
 /*
- * "Ґримуар" style system — see docs/GAME-DESIGN.md §8.
- * Dark tone, engraving-style contrast, restrained glow. Every color/spacing/font value
- * used anywhere in the UI should reference one of these custom properties, not a literal —
- * that is what keeps the whole game visually consistent as more screens are added.
+ * "Forge" style system — dark cartoon idle-RPG look (see docs/GAME-DESIGN.md §8).
+ * Dark charcoal-navy deck, saturated grass field, chunky rounded type, bold candy-colored
+ * buttons. Every color/spacing/font value used anywhere in the UI should reference one of
+ * these custom properties, not a literal — that is what keeps the whole game visually
+ * consistent as more screens are added, and a single-block theme swap (light↔dark).
+ *
+ * (File is still named grimoire.css for the stable import path in index.html; the visual
+ * language it carries is the cartoon "Forge" theme.)
  */
 
 :root {
-  /* Palette */
-  --color-bg: #100d0a;
-  --color-bg-raised: #1a1510;
-  --color-gold: #c9a227;
-  --color-emerald: #3fa372;
-  --color-purple: #6e4b8e;
-  --color-ink: #f2e9d8;
-  --color-ink-dim: #a89a82;
-  --color-danger: #a3402f;
+  /* Palette — surfaces (dark deck) */
+  --color-bg: #171922; /* app + deck background: deep charcoal-navy */
+  --color-surface: #262b38; /* cards, cells, chips */
+  --color-surface-2: #2f3542; /* subtly raised rows */
+  --color-sunken: #12141b; /* empty slot wells, meter tracks */
+  --color-line: #363c4a; /* hairline borders between dark surfaces */
+  --color-line-strong: #4a5162;
+
+  /* Palette — ink */
+  --color-ink: #eef1f7; /* primary text on dark surfaces */
+  --color-ink-dim: #98a2b6; /* secondary text */
+  --color-ink-inverse: #ffffff; /* text on colored buttons */
+
+  /* Palette — brand / accents (slightly brightened to sing on a dark deck) */
+  --color-primary: #3d97ff; /* candy blue (equipped/primary, the reference's INSTALL) */
+  --color-primary-dark: #1f6ad0; /* chunky-button bottom edge + pressed */
+  --color-primary-soft: #22344d; /* dark-tinted fill behind selected/equipped */
+  --color-success: #4cbe4f; /* forge/brew green */
+  --color-success-dark: #2f8f34;
+  --color-gold: #ffc23c; /* coins */
+  --color-gold-dark: #d1900f;
+  --color-danger: #ef5a41;
+  --color-danger-dark: #c23c28;
+
+  /* Field tint (mirrors the Three.js battle scene grass, for DOM fallbacks) */
+  --color-field: #6cbf43;
+  --color-field-dark: #4f9e30;
 
   /* Typography */
-  --font-display: "IM Fell English SC", serif;
-  --font-body: "EB Garamond", serif;
+  --font-display: "Fredoka", "Nunito", system-ui, sans-serif;
+  --font-body: "Nunito", system-ui, sans-serif;
 
-  /* Spacing scale */
+  /* Spacing scale (4/8 rhythm) */
   --space-1: 0.25rem;
   --space-2: 0.5rem;
   --space-3: 1rem;
@@ -31,10 +53,18 @@
    * by main.ts from src/data/rarity-visuals.ts — the canonical source shared with the
    * Three.js renderer. Do not hardcode rarity colors here. */
 
-  /* Effects */
-  --radius: 4px;
-  --glow-gold: 0 0 12px rgba(201, 162, 39, 0.35);
-  --border-subtle: 1px solid rgba(201, 162, 39, 0.25);
+  /* Effects — cartoon: rounded corners, soft ambient shadow, chunky "3D" button lips. */
+  --radius: 12px;
+  --radius-lg: 18px;
+  --radius-pill: 999px;
+  --border-subtle: 1px solid var(--color-line);
+  /* Card lift: a soft ambient drop that reads as depth on the dark deck. */
+  --shadow-card:
+    0 1px 2px rgba(0, 0, 0, 0.3),
+    0 6px 16px rgba(0, 0, 0, 0.38);
+  --shadow-inset: inset 0 2px 4px rgba(0, 0, 0, 0.42);
+  /* Overlay text over the bright scene needs a dark halo to stay legible on grass. */
+  --scene-text-shadow: 0 2px 6px rgba(12, 30, 12, 0.6);
 }
 
 * {
@@ -49,86 +79,108 @@ body {
   font-family: var(--font-body);
   font-size: 16px;
   line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
 }
 
 /* Solid color lives on `html` only, not `body`: per the CSS canvas-background
  * propagation rule, a non-transparent `html` background becomes the viewport's true
  * bottom layer, painted *below* every positioned element regardless of z-index. If
  * `body` also painted an opaque color, it would sit in the normal in-flow paint step —
- * *above* `render/three-app.ts`'s fixed, z-index:-1 canvas — and hide it completely. */
+ * *above* `render/three-app.ts`'s fixed, z-index:0 canvas — and hide it completely. */
 html {
   background: var(--color-bg);
 }
 
-/* Subtle vignette so the lab feels lit by a single candle, not a flat void. Translucent,
- * so it layers over the Three.js canvas without hiding it. */
+/* Faint top glow so the deck feels lit, not flat. Translucent, so it layers over the
+ * Three.js canvas without hiding it. */
 body {
-  background-image: radial-gradient(
-    ellipse at 50% 20%,
-    rgba(201, 162, 39, 0.04),
-    transparent 60%
-  );
+  background-image: radial-gradient(ellipse at 50% 0%, rgba(47, 139, 239, 0.06), transparent 55%);
 }
 
-/* Portrait game frame (mobile-first, web-portal format): one centered column. */
+/* Portrait game frame (mobile-first, web-portal format): one centered column that fills the
+ * viewport exactly and never scrolls — this is a single playable-ad-style screen, not a
+ * document. `dvh` tracks the *dynamic* viewport so mobile browser chrome sliding in/out
+ * doesn't clip the deck; `vh` is the fallback for engines without it. */
 #app {
-  min-height: 100%;
+  /* Own stacking context above the Three.js canvas (render/three-app.ts mounts it fixed at
+   * z-index 0). This lifts the DOM UI over the scene while its transparent regions (the
+   * battle `.scene`) still reveal the canvas behind. */
+  position: relative;
+  z-index: 1;
+  height: 100vh;
+  height: 100dvh;
   width: 100%;
-  max-width: 560px;
+  max-width: 480px;
   margin: 0 auto;
   display: flex;
   flex-direction: column;
-  padding: var(--space-2) var(--space-3) var(--space-5);
-  gap: var(--space-3);
+  padding: var(--space-2) var(--space-2) 0;
+  gap: var(--space-2);
+  overflow: hidden;
 }
 
 h1,
 h2,
 h3 {
   font-family: var(--font-display);
-  letter-spacing: 0.03em;
-  color: var(--color-gold);
-  text-shadow: var(--glow-gold);
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: var(--color-ink);
   margin: 0;
 }
 
+/* Base button = light rounded pill with a soft lift. Colored/chunky variants (.cta,
+ * .btn-primary) layer on top. */
 button {
-  font-family: var(--font-body);
-  font-size: 1rem;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 0.95rem;
   color: var(--color-ink);
-  background: var(--color-bg-raised);
-  border: var(--border-subtle);
+  background: var(--color-surface);
+  border: 1px solid var(--color-line-strong);
   border-radius: var(--radius);
   padding: var(--space-2) var(--space-4);
   cursor: pointer;
+  box-shadow: 0 2px 0 var(--color-line-strong);
   transition:
-    background 0.15s ease,
-    box-shadow 0.15s ease;
+    background 0.14s ease,
+    box-shadow 0.14s ease,
+    transform 0.06s ease,
+    filter 0.14s ease;
 }
 
-button:hover {
-  background: #241d15;
-  box-shadow: var(--glow-gold);
+button:hover:not(:disabled) {
+  filter: brightness(1.03);
 }
 
-button:active {
-  transform: translateY(1px);
+button:active:not(:disabled) {
+  transform: translateY(2px);
+  box-shadow: 0 0 0 var(--color-line-strong);
 }
 
 button:disabled {
-  opacity: 0.5;
+  opacity: 0.45;
   cursor: not-allowed;
   box-shadow: none;
 }
 
 /* Compact variant for buttons inside list rows (potion shelf, upgrade shop). */
 button.btn-small {
-  font-size: 0.85rem;
-  padding: var(--space-1) var(--space-2);
+  font-size: 0.8rem;
+  padding: var(--space-1) var(--space-3);
+}
+
+/* Solid candy-blue action, used for row-level primary buttons (equip, buy). Uses the
+ * darker blue as the face (not --color-primary) so white label text clears WCAG 4.5:1. */
+button.btn-primary {
+  color: var(--color-ink-inverse);
+  background: var(--color-primary-dark);
+  border-color: #14509f;
+  box-shadow: 0 2px 0 #14509f;
 }
 
 :focus-visible {
-  outline: 2px solid var(--color-gold);
+  outline: 3px solid var(--color-primary);
   outline-offset: 2px;
 }
 
@@ -136,7 +188,8 @@ button.btn-small {
  * Outlined text pattern (ported as a CSS technique from playable-ad UIs): a wrapper holds
  * two identical text spans — the absolute `.outline` copy underneath painted only as a
  * thick stroke, the normal copy on top with a solid fill. Gives game-style outlined
- * numbers with zero JS and zero canvas. Usage:
+ * numbers with zero JS and zero canvas. The stroke color defaults to a dark ink so bright
+ * HUD digits pop; override per use with `--outline-color`. Usage:
  *
  *   <span class="text-holder">
  *     <span class="text outline" aria-hidden="true">123</span>
@@ -155,7 +208,7 @@ button.btn-small {
   z-index: 0;
   pointer-events: none;
   color: transparent;
-  -webkit-text-stroke: 0.16em var(--outline-color, #000);
+  -webkit-text-stroke: 0.14em var(--outline-color, #1a2536);
 }
 
 .text-holder > .text:not(.outline) {

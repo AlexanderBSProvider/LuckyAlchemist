@@ -112,7 +112,7 @@ export interface BrewData {
 
 /**
  * Consumes one of each ingredient listed in the recipe as the brewing stake (GAME-DESIGN.md
- * §1: "провал = інгредієнти в попіл"). No-op if the recipe is empty or the player doesn't
+ * §1: "failure = ingredients turn to ash"). No-op if the recipe is empty or the player doesn't
  * hold enough of any listed ingredient — spending is validated here so `core/brewing`'s
  * `brew` never has to know about inventory.
  */

@@ -34,7 +34,13 @@ export function createThreeApp(): ThreeAppHandle {
 
   renderer.domElement.style.position = "fixed";
   renderer.domElement.style.inset = "0";
-  renderer.domElement.style.zIndex = "-1";
+  // z-index 0 (not -1): a fixed element at a *negative* z-index paints *below* the root
+  // element's background box, so the opaque `html` background in grimoire.css would cover
+  // the canvas entirely (Chromium paints the propagated root background over negative-z
+  // descendants). Instead the canvas sits at z-index 0 and `#app` is lifted to z-index 1
+  // (styles/grimoire.css) so the DOM UI paints *over* the canvas while its transparent
+  // regions (the battle `.scene`) still reveal it.
+  renderer.domElement.style.zIndex = "0";
   renderer.domElement.style.pointerEvents = "none";
   document.body.prepend(renderer.domElement);
 
@@ -66,8 +72,21 @@ export function createThreeApp(): ThreeAppHandle {
   const loop = (nowMs: number): void => {
     const deltaMs = nowMs - lastFrameMs;
     lastFrameMs = nowMs;
-    for (const fn of callbacks) fn(deltaMs);
-    renderer.render(scene, camera);
+    // A throw in one scene's per-frame callback must not kill the shared render loop:
+    // without isolation, one bad tick would skip `requestAnimationFrame` below and freeze
+    // *every* scene permanently. Isolate each callback (and the render) and keep looping.
+    for (const fn of callbacks) {
+      try {
+        fn(deltaMs);
+      } catch (error) {
+        console.error("three-app: scene tick threw", error);
+      }
+    }
+    try {
+      renderer.render(scene, camera);
+    } catch (error) {
+      console.error("three-app: renderer.render threw", error);
+    }
     rafId = requestAnimationFrame(loop);
   };
   rafId = requestAnimationFrame(loop);

@@ -38,7 +38,8 @@ export function mountAppShell(container: HTMLElement, deps: AppShellDeps): () =>
 
   const saveButton = document.createElement("button");
   saveButton.type = "button";
-  saveButton.textContent = "Зберегти";
+  saveButton.className = "app-shell__save";
+  saveButton.textContent = "Save";
   saveButton.addEventListener("click", () => {
     void saveGame(store, io, events, now());
   });
@@ -48,13 +49,13 @@ export function mountAppShell(container: HTMLElement, deps: AppShellDeps): () =>
   container.append(root);
 
   const unsubscribeSaved = events.on("save:written", ({ at }) => {
-    statusLine.textContent = `Збережено о ${new Date(at).toLocaleTimeString("uk-UA")}`;
+    statusLine.textContent = `Saved at ${new Date(at).toLocaleTimeString("en-US")}`;
   });
   const unsubscribeLoaded = events.on("save:loaded", ({ at }) => {
-    statusLine.textContent = `Сейв відновлено (${new Date(at).toLocaleTimeString("uk-UA")})`;
+    statusLine.textContent = `Save restored (${new Date(at).toLocaleTimeString("en-US")})`;
   });
   const unsubscribeLoadFailed = events.on("save:load-failed", ({ reason }) => {
-    statusLine.textContent = `Новий сейв (${reason})`;
+    statusLine.textContent = `New save (${reason})`;
   });
 
   return () => {

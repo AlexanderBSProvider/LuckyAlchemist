@@ -1,6 +1,6 @@
 /**
  * Cancels stale scheduled callbacks (setTimeout/requestAnimationFrame chains) when an
- * interruptible animation is re-triggered before finishing — e.g. clicking "Варити" again
+ * interruptible animation is re-triggered before finishing — e.g. clicking "Brew" again
  * while the previous brew's burst animation is still playing. Deferred callbacks check
  * `isCurrent(token)` before acting instead of firing late into unrelated state.
  *

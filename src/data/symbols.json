@@ -1,7 +1,7 @@
 [
-  { "id": "fire", "label": "Вогонь", "rarity": "common" },
-  { "id": "earth", "label": "Земля", "rarity": "common" },
-  { "id": "water", "label": "Вода", "rarity": "uncommon" },
-  { "id": "metal", "label": "Метал", "rarity": "rare" },
-  { "id": "spirit", "label": "Дух", "rarity": "epic" }
+  { "id": "fire", "label": "Fire", "rarity": "common" },
+  { "id": "earth", "label": "Earth", "rarity": "common" },
+  { "id": "water", "label": "Water", "rarity": "uncommon" },
+  { "id": "metal", "label": "Metal", "rarity": "rare" },
+  { "id": "spirit", "label": "Spirit", "rarity": "epic" }
 ]
