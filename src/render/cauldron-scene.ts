@@ -1,19 +1,10 @@
-import {
-  CircleGeometry,
-  Group,
-  Mesh,
-  RingGeometry,
-  Sprite,
-  type MeshBasicMaterial,
-  type Scene,
-} from "three";
+import { Container, Graphics, type Text } from "pixi.js";
 import { createAnimationTokenGuard } from "../lib/animation-token";
 import { symbols } from "../data";
 import { glyphFor } from "../data/glyphs";
 import type { EventBus, GameEventMap } from "../store/events";
-import { flatColorMaterial, flatSpriteMaterial } from "./flat-material";
-import { getGlyphTexture } from "./glyph-texture";
-import type { RenderTicker } from "./three-app";
+import { createGlyphText } from "./glyph-text";
+import type { RenderTicker } from "./pixi-app";
 import { scheduleTimedTriggers } from "./vfx/frame-triggers";
 
 export interface CauldronSceneDeps {
@@ -21,7 +12,7 @@ export interface CauldronSceneDeps {
   ticker: RenderTicker;
   /** The DOM element `ui/lab-panel.ts` reserves for the scene (`.scene__rings`) — the
    * scene is drawn at this element's screen rect every frame, so DOM keeps owning layout
-   * while Three.js owns the visuals (ARCHITECTURE.md §6). */
+   * while Pixi owns the visuals (ARCHITECTURE.md §6). */
   anchor: HTMLElement;
 }
 
@@ -61,119 +52,107 @@ function easeOutBurst(t: number): number {
 }
 
 interface RingGlyph {
-  readonly sprite: Sprite;
+  readonly text: Text;
   readonly unit: { x: number; y: number };
 }
 
 interface Ring {
-  readonly group: Group;
-  readonly border: Mesh;
+  readonly container: Container;
+  readonly border: Graphics;
   readonly glyphs: RingGlyph[];
   readonly radiusFraction: number;
 }
 
-let orderCounter = 0;
-function nextOrder(): number {
-  orderCounter += 1;
-  return orderCounter;
-}
-
 function buildRing(config: (typeof RING_CONFIGS)[number]): Ring {
-  const group = new Group();
+  const container = new Container();
   const radiusFraction = 0.5 * (1 - config.insetFraction);
 
-  const border = new Mesh(new RingGeometry(0.97, 1, 64), flatColorMaterial(COLOR_GOLD, 0.16));
-  border.renderOrder = nextOrder();
-  group.add(border);
+  // Unit circle stroked entirely inward of radius 1 (`alignment: 1`), matching the old
+  // `RingGeometry(0.97, 1, 64)` annulus exactly — the whole shape is then uniformly scaled
+  // per frame in `layoutRing`, so the stroke thickness scales along with the ring radius.
+  const border = new Graphics()
+    .circle(0, 0, 1)
+    .stroke({ width: 0.03, color: COLOR_GOLD, alpha: 0.16, alignment: 1 });
+  container.addChild(border);
 
   const glyphs: RingGlyph[] = symbols.map((symbol, i) => {
     const angleDeg = (360 / symbols.length) * i;
     const angle = (angleDeg * Math.PI) / 180;
-    const glyphTexture = getGlyphTexture({
+    const text = createGlyphText({
       text: glyphFor(symbol.id),
       fontSize: config.fontSize,
       color: COLOR_INK_DIM,
     });
-    const sprite = new Sprite(flatSpriteMaterial(glyphTexture.texture));
-    sprite.scale.set(glyphTexture.width, glyphTexture.height, 1);
-    sprite.renderOrder = nextOrder();
-    group.add(sprite);
-    return { sprite, unit: { x: Math.cos(angle), y: Math.sin(angle) } };
+    text.anchor.set(0.5, 0.5);
+    container.addChild(text);
+    return { text, unit: { x: Math.cos(angle), y: Math.sin(angle) } };
   });
 
-  return { group, border, glyphs, radiusFraction };
+  return { container, border, glyphs, radiusFraction };
 }
 
 function layoutRing(ring: Ring, boxSize: number): void {
   const radius = ring.radiusFraction * boxSize;
-  ring.border.scale.set(radius, radius, 1);
+  ring.border.scale.set(radius);
   for (const glyph of ring.glyphs) {
-    glyph.sprite.position.set(glyph.unit.x * radius, glyph.unit.y * radius, 0);
+    glyph.text.position.set(glyph.unit.x * radius, glyph.unit.y * radius);
   }
 }
 
 interface Cauldron {
-  readonly group: Group;
-  readonly glow: Mesh;
-  readonly glowMaterial: MeshBasicMaterial;
-  readonly bodyFill: Mesh;
-  readonly bodyEdge: Mesh;
+  readonly container: Container;
+  readonly glow: Graphics;
+  readonly bodyFill: Graphics;
+  readonly bodyEdge: Graphics;
 }
 
 function buildCauldron(): Cauldron {
-  const group = new Group();
-  const glowMaterial = flatColorMaterial(COLOR_EMERALD, 0.35);
-  const glow = new Mesh(new CircleGeometry(1, 48), glowMaterial);
-  const bodyFill = new Mesh(new CircleGeometry(1, 48), flatColorMaterial(COLOR_CAULDRON_EDGE, 1));
-  const bodyEdge = new Mesh(new RingGeometry(0.93, 1, 48), flatColorMaterial(COLOR_GOLD, 0.35));
-  glow.renderOrder = nextOrder();
-  bodyFill.renderOrder = nextOrder();
-  bodyEdge.renderOrder = nextOrder();
-  group.add(glow, bodyFill, bodyEdge);
-  return { group, glow, glowMaterial, bodyFill, bodyEdge };
+  const container = new Container();
+  const glow = new Graphics().circle(0, 0, 1).fill({ color: COLOR_EMERALD });
+  const bodyFill = new Graphics().circle(0, 0, 1).fill({ color: COLOR_CAULDRON_EDGE });
+  const bodyEdge = new Graphics()
+    .circle(0, 0, 1)
+    .stroke({ width: 0.07, color: COLOR_GOLD, alpha: 0.35, alignment: 1 });
+  container.addChild(glow, bodyFill, bodyEdge);
+  return { container, glow, bodyFill, bodyEdge };
 }
 
 interface Bubble {
-  readonly mesh: Mesh;
-  readonly material: MeshBasicMaterial;
+  readonly graphic: Graphics;
   readonly config: (typeof BUBBLES)[number];
 }
 
 function buildBubbles(cauldron: Cauldron): Bubble[] {
   return BUBBLES.map((config) => {
-    const material = flatColorMaterial(0xf2e9d8, 0);
-    const mesh = new Mesh(new CircleGeometry(1, 16), material);
-    mesh.renderOrder = nextOrder();
-    cauldron.group.add(mesh);
-    return { mesh, material, config };
+    const graphic = new Graphics().circle(0, 0, 1).fill({ color: 0xf2e9d8 });
+    cauldron.container.addChild(graphic);
+    return { graphic, config };
   });
 }
 
 interface Spark {
-  readonly mesh: Mesh;
-  readonly material: MeshBasicMaterial;
+  readonly graphic: Graphics;
   readonly spawnedAt: number;
   readonly intensity: number;
 }
 
 /**
- * Draws the alchemist's cauldron and three symbol rings — the Three.js replacement for the
- * Pixi version, same reactive shape: reacts to `brew:success`/`brew:fail` (see
- * `store/actions.ts`) instead of `store.subscribe`, since the burst is a one-shot reaction to
- * an outcome, not a function of continuous state.
+ * Draws the alchemist's cauldron and three symbol rings. Reacts to `brew:success`/
+ * `brew:fail` (see `store/actions.ts`) instead of `store.subscribe`, since the burst is a
+ * one-shot reaction to an outcome, not a function of continuous state.
  */
-export function mountCauldronScene(scene: Scene, deps: CauldronSceneDeps): () => void {
+export function mountCauldronScene(stage: Container, deps: CauldronSceneDeps): () => void {
   const { events, ticker, anchor } = deps;
 
-  const sceneRoot = new Group();
-  const ringsGroup = new Group();
+  const sceneRoot = new Container();
+  const ringsGroup = new Container();
   const rings = RING_CONFIGS.map(buildRing);
-  for (const ring of rings) ringsGroup.add(ring.group);
+  for (const ring of rings) ringsGroup.addChild(ring.container);
   const cauldron = buildCauldron();
   const bubbles = buildBubbles(cauldron);
 
-  sceneRoot.add(ringsGroup, cauldron.group);
-  scene.add(sceneRoot);
+  sceneRoot.addChild(ringsGroup, cauldron.container);
+  stage.addChild(sceneRoot);
 
   const sparks: Spark[] = [];
 
@@ -193,11 +172,9 @@ export function mountCauldronScene(scene: Scene, deps: CauldronSceneDeps): () =>
   let lastFrameDeltaMs = 16;
 
   const spawnSpark = (intensity: number): void => {
-    const material = flatColorMaterial(0xf2e9d8, 0.5 * intensity);
-    const mesh = new Mesh(new CircleGeometry(1, 24), material);
-    mesh.renderOrder = nextOrder();
-    cauldron.group.add(mesh);
-    sparks.push({ mesh, material, spawnedAt: performance.now(), intensity });
+    const graphic = new Graphics().circle(0, 0, 1).fill({ color: 0xf2e9d8 });
+    cauldron.container.addChild(graphic);
+    sparks.push({ graphic, spawnedAt: performance.now(), intensity });
   };
 
   const startBurst = (): void => {
@@ -230,18 +207,18 @@ export function mountCauldronScene(scene: Scene, deps: CauldronSceneDeps): () =>
     const rect = anchor.getBoundingClientRect();
     const boxSize = Math.max(1, Math.min(rect.width, rect.height));
     lastBoxSize = boxSize;
-    sceneRoot.position.set(rect.left + rect.width / 2, rect.top + rect.height / 2, 0);
+    sceneRoot.position.set(rect.left + rect.width / 2, rect.top + rect.height / 2);
 
     for (const ring of rings) layoutRing(ring, boxSize);
 
     const cauldronRadius = boxSize * 0.1;
-    cauldron.glow.scale.set(cauldronRadius * 1.4, cauldronRadius * 1.4, 1);
-    cauldron.bodyFill.scale.set(cauldronRadius, cauldronRadius, 1);
-    cauldron.bodyEdge.scale.set(cauldronRadius, cauldronRadius, 1);
+    cauldron.glow.scale.set(cauldronRadius * 1.4);
+    cauldron.bodyFill.scale.set(cauldronRadius);
+    cauldron.bodyEdge.scale.set(cauldronRadius);
 
     const nowMs = performance.now();
     const pulse = 0.5 + 0.5 * Math.sin(nowMs / 2000);
-    cauldron.glowMaterial.opacity = 0.2 + pulse * 0.35;
+    cauldron.glow.alpha = 0.2 + pulse * 0.35;
 
     for (const bubble of bubbles) {
       const phase = ((nowMs + bubble.config.delayMs) % BUBBLE_LOOP_MS) / BUBBLE_LOOP_MS;
@@ -250,10 +227,10 @@ export function mountCauldronScene(scene: Scene, deps: CauldronSceneDeps): () =>
       const y = boxSize * 0.42 - phase * travel;
       const alpha =
         phase < 0.15 ? (phase / 0.15) * 0.9 : phase > 0.85 ? 0 : 0.9 * (1 - phase);
-      bubble.mesh.position.set(x, y, 0);
+      bubble.graphic.position.set(x, y);
       const radius = bubble.config.radius * (boxSize / DESIGN_SIZE);
-      bubble.mesh.scale.set(radius, radius, 1);
-      bubble.material.opacity = Math.max(0, alpha);
+      bubble.graphic.scale.set(radius);
+      bubble.graphic.alpha = Math.max(0, alpha);
     }
 
     for (let i = sparks.length - 1; i >= 0; i--) {
@@ -262,12 +239,11 @@ export function mountCauldronScene(scene: Scene, deps: CauldronSceneDeps): () =>
       const elapsed = nowMs - spark.spawnedAt;
       const t = Math.min(1, elapsed / sparkDurationMs);
       const size = lastBoxSize * 0.28 * (0.4 + t * 0.6);
-      spark.mesh.scale.set(size, size, 1);
-      spark.material.opacity = (1 - t) * 0.6 * spark.intensity;
+      spark.graphic.scale.set(size);
+      spark.graphic.alpha = (1 - t) * 0.6 * spark.intensity;
       if (t >= 1) {
-        cauldron.group.remove(spark.mesh);
-        spark.mesh.geometry.dispose();
-        spark.material.dispose();
+        cauldron.container.removeChild(spark.graphic);
+        spark.graphic.destroy();
         sparks.splice(i, 1);
       }
     }
@@ -277,14 +253,14 @@ export function mountCauldronScene(scene: Scene, deps: CauldronSceneDeps): () =>
         const config = RING_CONFIGS[i];
         if (!config) continue;
         const angularSpeed = ((2 * Math.PI) / config.revolutionMs) * config.direction;
-        ring.group.rotation.z += angularSpeed * lastFrameDeltaMs;
+        ring.container.rotation += angularSpeed * lastFrameDeltaMs;
       }
     }
 
     if (burstStartMs !== null && burstToken !== null && tokenGuard.isCurrent(burstToken)) {
       const elapsed = nowMs - burstStartMs;
       const t = Math.min(1, elapsed / BURST_SPIN_MS);
-      ringsGroup.rotation.z = easeOutBurst(t) * BURST_REVOLUTIONS * 2 * Math.PI;
+      ringsGroup.rotation = easeOutBurst(t) * BURST_REVOLUTIONS * 2 * Math.PI;
       if (t >= 1) clearBurst();
     }
   };
@@ -296,6 +272,7 @@ export function mountCauldronScene(scene: Scene, deps: CauldronSceneDeps): () =>
     clearBurst();
     unsubscribeBrewSuccess();
     unsubscribeBrewFail();
-    scene.remove(sceneRoot);
+    stage.removeChild(sceneRoot);
+    sceneRoot.destroy({ children: true });
   };
 }

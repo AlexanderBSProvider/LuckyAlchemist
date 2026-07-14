@@ -1,23 +1,12 @@
-import {
-  CircleGeometry,
-  Group,
-  Mesh,
-  PlaneGeometry,
-  RingGeometry,
-  Sprite,
-  type MeshBasicMaterial,
-  type Scene,
-  type SpriteMaterial,
-} from "three";
+import { Container, Graphics, type Text } from "pixi.js";
 import { createAnimationTokenGuard } from "../lib/animation-token";
 import { stages } from "../data";
 import { foeGlyphFor } from "../data/glyphs";
 import type { EventBus, GameEventMap } from "../store/events";
 import type { GameState } from "../store/game-state";
 import type { Store } from "../store/store";
-import { flatColorMaterial, flatSpriteMaterial } from "./flat-material";
-import { getGlyphTexture } from "./glyph-texture";
-import type { RenderTicker } from "./three-app";
+import { createGlyphText, updateGlyphText } from "./glyph-text";
+import type { RenderTicker } from "./pixi-app";
 
 export interface BattleSceneDeps {
   events: EventBus<GameEventMap>;
@@ -56,12 +45,6 @@ const EMBER_SPAWN_INTERVAL_MS = 480;
 const EMBER_MAX_COUNT = 14;
 const EMBER_LIFE_MS = 2600;
 
-let orderCounter = 0;
-function nextOrder(): number {
-  orderCounter += 1;
-  return orderCounter;
-}
-
 function easeInOut(t: number): number {
   return t * t * (3 - 2 * t);
 }
@@ -70,68 +53,78 @@ function phaseT(t: number, from: number, to: number): number {
   return Math.max(0, Math.min(1, (t - from) / (to - from)));
 }
 
+/** Multiplies each RGB channel by `factor` — the Pixi stand-in for Three's
+ * `Color.multiplyScalar`, used to darken a base color for a foreground/foliage variant. */
+function darken(color: number, factor: number): number {
+  const r = Math.round(((color >> 16) & 0xff) * factor);
+  const g = Math.round(((color >> 8) & 0xff) * factor);
+  const b = Math.round((color & 0xff) * factor);
+  return (r << 16) | (g << 8) | b;
+}
+
+function flatRect(color: number, alpha = 1): Graphics {
+  const graphic = new Graphics().rect(-0.5, -0.5, 1, 1).fill({ color });
+  graphic.alpha = alpha;
+  return graphic;
+}
+
+function flatCircle(color: number, alpha = 1): Graphics {
+  const graphic = new Graphics().circle(0, 0, 1).fill({ color });
+  graphic.alpha = alpha;
+  return graphic;
+}
+
 interface EllipseLayer {
-  readonly mesh: Mesh;
-  readonly material: MeshBasicMaterial;
+  readonly graphic: Graphics;
   readonly rx: number;
   readonly ry: number;
 }
 
 function buildEllipse(
-  parent: Group,
+  parent: Container,
   rx: number,
   ry: number,
   color: number,
   alpha: number,
   ring?: { innerFraction: number },
 ): EllipseLayer {
-  const geometry = ring
-    ? new RingGeometry(ring.innerFraction, 1, 64)
-    : new CircleGeometry(1, 64);
-  const material = flatColorMaterial(color, alpha);
-  const mesh = new Mesh(geometry, material);
-  mesh.renderOrder = nextOrder();
-  parent.add(mesh);
-  return { mesh, material, rx, ry };
+  const graphic = new Graphics();
+  if (ring) {
+    graphic.circle(0, 0, 1).stroke({ width: 1 - ring.innerFraction, color, alignment: 1 });
+  } else {
+    graphic.circle(0, 0, 1).fill({ color });
+  }
+  graphic.alpha = alpha;
+  parent.addChild(graphic);
+  return { graphic, rx, ry };
 }
 
 interface Fighter {
-  readonly sprite: Sprite;
-  readonly material: SpriteMaterial;
-  baseWidth: number;
-  baseHeight: number;
+  readonly text: Text;
 }
 
 function buildFighter(text: string): Fighter {
-  const glyphTexture = getGlyphTexture({
+  const glyphText = createGlyphText({
     text,
     fontSize: FIGHTER_FONT_SIZE,
     color: COLOR_INK,
     dropShadow: { color: COLOR_SHADOW, alpha: 0.6, blur: 6, distance: 4 },
   });
-  const material = flatSpriteMaterial(glyphTexture.texture);
-  const sprite = new Sprite(material);
-  sprite.center.set(0.5, 0.78);
-  sprite.renderOrder = nextOrder();
-  return { sprite, material, baseWidth: glyphTexture.width, baseHeight: glyphTexture.height };
+  glyphText.anchor.set(0.5, 0.78);
+  return { text: glyphText };
 }
 
 function setFighterGlyph(fighter: Fighter, text: string): void {
-  const glyphTexture = getGlyphTexture({
+  updateGlyphText(fighter.text, {
     text,
     fontSize: FIGHTER_FONT_SIZE,
     color: COLOR_INK,
     dropShadow: { color: COLOR_SHADOW, alpha: 0.6, blur: 6, distance: 4 },
   });
-  fighter.material.map = glyphTexture.texture;
-  fighter.material.needsUpdate = true;
-  fighter.baseWidth = glyphTexture.width;
-  fighter.baseHeight = glyphTexture.height;
 }
 
 interface Ember {
-  readonly mesh: Mesh;
-  readonly material: MeshBasicMaterial;
+  readonly graphic: Graphics;
   readonly bornAt: number;
   readonly xFraction: number;
   readonly sway: number;
@@ -145,89 +138,78 @@ interface Ember {
  * on the auto-battle timer (`main.ts`); this scene only replays `battle:won`/`battle:lost`
  * outcomes it hears on the event bus, never rolls anything itself.
  */
-export function mountBattleScene(scene: Scene, deps: BattleSceneDeps): () => void {
+export function mountBattleScene(stage: Container, deps: BattleSceneDeps): () => void {
   const { events, store, ticker, anchor } = deps;
 
-  const sceneRoot = new Group();
+  const sceneRoot = new Container();
 
   // --- Background scenery: a bright top-down meadow with a battle lane -----------------
   // The reference's outdoor field, in our flat-shape language: a full grass plane, a
   // slightly darker foreground strip for depth, a brown dirt lane the fighters stand on,
-  // and silhouette tree/rock props. Built first so their renderOrder stays below the
-  // floor/fighters (drawn behind).
-  const backdrop = new Group();
-  const grassFieldMaterial = flatColorMaterial(COLOR_GRASS, 1);
-  const grassField = new Mesh(new PlaneGeometry(1, 1), grassFieldMaterial);
-  grassField.renderOrder = nextOrder();
-  backdrop.add(grassField);
+  // and silhouette tree/rock props. Built first so they paint behind the floor/fighters
+  // (Pixi containers paint in child-insertion order — no `renderOrder` needed).
+  const backdrop = new Container();
+  const grassField = flatRect(COLOR_GRASS);
+  backdrop.addChild(grassField);
 
   // Darker grass strip along the very bottom = a hint of foreground depth.
-  const grassNearMaterial = flatColorMaterial(COLOR_GRASS, 1);
-  grassNearMaterial.color.multiplyScalar(0.82);
-  const grassNear = new Mesh(new PlaneGeometry(1, 1), grassNearMaterial);
-  grassNear.renderOrder = nextOrder();
-  backdrop.add(grassNear);
+  const grassNear = flatRect(darken(COLOR_GRASS, 0.82));
+  backdrop.addChild(grassNear);
 
   // Brown battle lane across the middle — where the two fighters meet.
-  const laneMaterial = flatColorMaterial(COLOR_DIRT, 1);
-  const lane = new Mesh(new PlaneGeometry(1, 1), laneMaterial);
-  lane.renderOrder = nextOrder();
-  backdrop.add(lane);
+  const lane = flatRect(COLOR_DIRT);
+  backdrop.addChild(lane);
 
-  const buildTreeProp = (): Group => {
-    const group = new Group();
-    const trunk = new Mesh(new PlaneGeometry(1, 1), flatColorMaterial(COLOR_DIRT, 0.95));
-    trunk.renderOrder = nextOrder();
-    trunk.scale.set(0.1, 0.45, 1);
-    trunk.position.set(0, -0.22, 0); // up from the base (y-down world, so negative = up)
-    const foliage = new Mesh(new CircleGeometry(1, 24), flatColorMaterial(COLOR_GRASS, 1));
-    foliage.renderOrder = nextOrder();
-    foliage.material.color.multiplyScalar(0.88); // a touch darker than the field so it reads
-    foliage.scale.set(0.42, 0.42, 1);
-    foliage.position.set(0, -0.55, 0);
-    group.add(trunk, foliage);
+  const buildTreeProp = (): Container => {
+    const group = new Container();
+    const trunk = flatRect(COLOR_DIRT, 0.95);
+    trunk.scale.set(0.1, 0.45);
+    trunk.position.set(0, -0.22); // up from the base (y-down world, so negative = up)
+    const foliage = flatCircle(darken(COLOR_GRASS, 0.88)); // a touch darker than the field so it reads
+    foliage.scale.set(0.42, 0.42);
+    foliage.position.set(0, -0.55);
+    group.addChild(trunk, foliage);
     return group;
   };
 
-  const buildRockProp = (): Group => {
-    const group = new Group();
-    const rock = new Mesh(new CircleGeometry(1, 20), flatColorMaterial(0x9aa3ad, 0.95));
-    rock.renderOrder = nextOrder();
-    rock.scale.set(0.45, 0.28, 1);
-    rock.position.set(0, -0.14, 0);
-    group.add(rock);
+  const buildRockProp = (): Container => {
+    const group = new Container();
+    const rock = flatCircle(0x9aa3ad, 0.95);
+    rock.scale.set(0.45, 0.28);
+    rock.position.set(0, -0.14);
+    group.addChild(rock);
     return group;
   };
 
   interface BackdropProp {
-    readonly group: Group;
+    readonly container: Container;
     readonly xFraction: number;
     readonly scale: number;
   }
   const backdropProps: BackdropProp[] = [
-    { group: buildTreeProp(), xFraction: 0.1, scale: 1 },
-    { group: buildTreeProp(), xFraction: 0.9, scale: 1.15 },
-    { group: buildRockProp(), xFraction: 0.72, scale: 0.9 },
+    { container: buildTreeProp(), xFraction: 0.1, scale: 1 },
+    { container: buildTreeProp(), xFraction: 0.9, scale: 1.15 },
+    { container: buildRockProp(), xFraction: 0.72, scale: 0.9 },
   ];
-  for (const prop of backdropProps) backdrop.add(prop.group);
-  sceneRoot.add(backdrop);
+  for (const prop of backdropProps) backdrop.addChild(prop.container);
+  sceneRoot.addChild(backdrop);
 
   // --- Arena floor: a soft trodden patch under the fighters ----------------------------
-  const floor = new Group();
+  const floor = new Container();
   const floorShadow = buildEllipse(floor, 1, 0.3, COLOR_SHADOW, 0.16);
   const floorBase = buildEllipse(floor, 0.9, 0.26, COLOR_DIRT_DARK, 0.4);
   const floorBaseEdge = buildEllipse(floor, 0.9, 0.26, COLOR_WHITE, 0.06, { innerFraction: 0.95 });
   const floorMist = buildEllipse(floor, 0.6, 0.16, COLOR_DIRT, 0.18);
 
   // --- Marker circles under each fighter ------------------------------------------------
-  const heroCircleGroup = new Group();
+  const heroCircleGroup = new Container();
   const heroCircleOuter = buildEllipse(heroCircleGroup, 1, 0.3, COLOR_HERO, 0.55, {
     innerFraction: 0.9,
   });
   const heroCircleInner = buildEllipse(heroCircleGroup, 0.72, 0.216, COLOR_HERO, 0.32, {
     innerFraction: 0.94,
   });
-  const foeCircleGroup = new Group();
+  const foeCircleGroup = new Container();
   const foeCircleOuter = buildEllipse(foeCircleGroup, 1, 0.3, COLOR_DANGER, 0.5, {
     innerFraction: 0.9,
   });
@@ -240,29 +222,24 @@ export function mountBattleScene(scene: Scene, deps: BattleSceneDeps): () => voi
   const foe = buildFighter(foeGlyphFor(store.getState().currentStageId));
 
   // Impact flash, hidden until a clash.
-  const clashFlashMaterial = flatColorMaterial(COLOR_INK, 0.85);
-  const clashFlash = new Mesh(new CircleGeometry(1, 32), clashFlashMaterial);
-  clashFlash.renderOrder = nextOrder();
+  const clashFlash = flatCircle(COLOR_INK);
   clashFlash.visible = false;
 
-  sceneRoot.add(floor, heroCircleGroup, foeCircleGroup, clashFlash, hero.sprite, foe.sprite);
-  scene.add(sceneRoot);
+  sceneRoot.addChild(floor, heroCircleGroup, foeCircleGroup, clashFlash, hero.text, foe.text);
+  stage.addChild(sceneRoot);
 
   // --- Ambient embers --------------------------------------------------------------------
-  const emberLayer = new Group();
-  sceneRoot.add(emberLayer);
+  const emberLayer = new Container();
+  sceneRoot.addChild(emberLayer);
   const embers: Ember[] = [];
   let lastEmberAt = 0;
 
   const spawnEmber = (now: number): void => {
     if (embers.length >= EMBER_MAX_COUNT) return;
-    const material = flatColorMaterial(COLOR_SPARK, 0.7);
-    const mesh = new Mesh(new CircleGeometry(1, 12), material);
-    mesh.renderOrder = nextOrder();
-    emberLayer.add(mesh);
+    const graphic = flatCircle(COLOR_SPARK);
+    emberLayer.addChild(graphic);
     embers.push({
-      mesh,
-      material,
+      graphic,
       bornAt: now,
       xFraction: 0.08 + Math.random() * 0.84,
       sway: 4 + Math.random() * 10,
@@ -315,8 +292,8 @@ export function mountBattleScene(scene: Scene, deps: BattleSceneDeps): () => voi
     fightToken = null;
     fightStartMs = null;
     clashFlash.visible = false;
-    hero.material.color.setHex(COLOR_WHITE);
-    foe.material.color.setHex(COLOR_WHITE);
+    hero.text.tint = COLOR_WHITE;
+    foe.text.tint = COLOR_WHITE;
     foeAlpha = 1;
     if (pendingFoeGlyph !== null) {
       setFighterGlyph(foe, pendingFoeGlyph);
@@ -343,26 +320,26 @@ export function mountBattleScene(scene: Scene, deps: BattleSceneDeps): () => voi
 
     // Meadow: a full grass plane, a darker foreground strip, and the dirt battle lane the
     // fighters stand on; then silhouette props rooted near the horizon.
-    grassField.position.set(centerX, rect.top + h * 0.5, 0);
-    grassField.scale.set(w, h, 1);
-    grassNear.position.set(centerX, rect.top + h * 0.92, 0);
-    grassNear.scale.set(w, h * 0.18, 1);
-    lane.position.set(centerX, groundY, 0);
-    lane.scale.set(w, h * 0.22, 1);
+    grassField.position.set(centerX, rect.top + h * 0.5);
+    grassField.scale.set(w, h);
+    grassNear.position.set(centerX, rect.top + h * 0.92);
+    grassNear.scale.set(w, h * 0.18);
+    lane.position.set(centerX, groundY);
+    lane.scale.set(w, h * 0.22);
     for (const prop of backdropProps) {
       const propScale = h * 0.46 * prop.scale;
-      prop.group.position.set(rect.left + prop.xFraction * w, groundY - h * 0.04, 0);
-      prop.group.scale.set(propScale, propScale, 1);
+      prop.container.position.set(rect.left + prop.xFraction * w, groundY - h * 0.04);
+      prop.container.scale.set(propScale);
     }
 
     // Floor spans most of the anchor width.
-    floor.position.set(centerX, groundY + h * 0.06, 0);
+    floor.position.set(centerX, groundY + h * 0.06);
     const floorScale = w * 0.44;
     for (const layer of [floorShadow, floorBase, floorBaseEdge, floorMist]) {
-      layer.mesh.scale.set(layer.rx * floorScale, layer.ry * floorScale, 1);
+      layer.graphic.scale.set(layer.rx * floorScale, layer.ry * floorScale);
     }
     const mistPulse = 0.5 + 0.5 * Math.sin(now / 1700);
-    floorMist.material.opacity = 0.05 + mistPulse * 0.09;
+    floorMist.graphic.alpha = 0.05 + mistPulse * 0.09;
 
     // Fighter posts; approach animation moves them toward the center.
     const heroPostX = rect.left + w * 0.27;
@@ -387,13 +364,13 @@ export function mountBattleScene(scene: Scene, deps: BattleSceneDeps): () => voi
         foeX = meetFoeX;
         const c = phaseT(t, PHASE_APPROACH_END, PHASE_CLASH_END);
         clashFlash.visible = c < 0.6;
-        clashFlash.position.set(centerX, groundY - h * 0.16, 0);
-        clashFlash.scale.set(h * 0.05 + c * h * 0.1, h * 0.05 + c * h * 0.1, 1);
-        clashFlashMaterial.opacity = (1 - c) * 0.85;
+        clashFlash.position.set(centerX, groundY - h * 0.16);
+        clashFlash.scale.set(h * 0.05 + c * h * 0.1);
+        clashFlash.alpha = (1 - c) * 0.85;
         shakeX = (Math.random() - 0.5) * 6 * (1 - c);
         shakeY = (Math.random() - 0.5) * 4 * (1 - c);
-        if (!fightWon && c > 0.5) hero.material.color.setHex(COLOR_DANGER);
-        if (fightWon && c > 0.5) foe.material.color.setHex(COLOR_DANGER);
+        if (!fightWon && c > 0.5) hero.text.tint = COLOR_DANGER;
+        if (fightWon && c > 0.5) foe.text.tint = COLOR_DANGER;
       } else if (t < PHASE_RETREAT_END) {
         clashFlash.visible = false;
         const r = easeInOut(phaseT(t, PHASE_CLASH_END, PHASE_RETREAT_END));
@@ -407,9 +384,9 @@ export function mountBattleScene(scene: Scene, deps: BattleSceneDeps): () => voi
           foeX = foePostX;
           foeYOffset = -aft * h * 0.1;
         } else {
-          hero.material.color.setHex(aft < 0.5 ? COLOR_DANGER : COLOR_WHITE);
+          hero.text.tint = aft < 0.5 ? COLOR_DANGER : COLOR_WHITE;
           const pulse = 1 + Math.sin(aft * Math.PI) * 0.12;
-          foe.sprite.scale.set(foe.baseWidth * fighterScale * pulse, foe.baseHeight * fighterScale * pulse, 1);
+          foe.text.scale.set(fighterScale * pulse);
         }
       }
 
@@ -427,48 +404,43 @@ export function mountBattleScene(scene: Scene, deps: BattleSceneDeps): () => voi
     if (fightStartMs === null && foeAlpha < 1) {
       foeAlpha = Math.min(1, foeAlpha + lastFrameDeltaMs / 400);
     }
-    foe.material.opacity = foeAlpha;
+    foe.text.alpha = foeAlpha;
 
     // Idle bob (subtle, opposite phases so it reads as two living creatures).
     const bobHero = Math.sin(now / 520) * h * 0.008;
     const bobFoe = Math.sin(now / 480 + Math.PI) * h * 0.008;
 
-    hero.sprite.position.set(heroX + shakeX, groundY + bobHero + shakeY, 0);
-    foe.sprite.position.set(
+    hero.text.position.set(heroX + shakeX, groundY + bobHero + shakeY);
+    foe.text.position.set(
       foeX + shakeX * 0.6,
       (fightStartMs !== null && fightWon ? groundY + foeYOffset : groundY + bobFoe) + shakeY * 0.6,
-      0,
     );
     if (fightStartMs === null || fightWon) {
-      hero.sprite.scale.set(hero.baseWidth * fighterScale, hero.baseHeight * fighterScale, 1);
+      hero.text.scale.set(fighterScale);
     }
     if (fightStartMs === null) {
-      foe.sprite.scale.set(foe.baseWidth * fighterScale, foe.baseHeight * fighterScale, 1);
+      foe.text.scale.set(fighterScale);
     }
 
-    heroCircleGroup.position.set(heroX, groundY + h * 0.035, 0);
+    heroCircleGroup.position.set(heroX, groundY + h * 0.035);
     const heroCircleScale = h * 0.14;
-    heroCircleOuter.mesh.scale.set(
+    heroCircleOuter.graphic.scale.set(
       heroCircleOuter.rx * heroCircleScale,
       heroCircleOuter.ry * heroCircleScale,
-      1,
     );
-    heroCircleInner.mesh.scale.set(
+    heroCircleInner.graphic.scale.set(
       heroCircleInner.rx * heroCircleScale,
       heroCircleInner.ry * heroCircleScale,
-      1,
     );
-    foeCircleGroup.position.set(foeX, groundY + h * 0.035, 0);
+    foeCircleGroup.position.set(foeX, groundY + h * 0.035);
     const foeCircleScale = h * 0.14;
-    foeCircleOuter.mesh.scale.set(
+    foeCircleOuter.graphic.scale.set(
       foeCircleOuter.rx * foeCircleScale,
       foeCircleOuter.ry * foeCircleScale,
-      1,
     );
-    foeCircleInner.mesh.scale.set(
+    foeCircleInner.graphic.scale.set(
       foeCircleInner.rx * foeCircleScale,
       foeCircleInner.ry * foeCircleScale,
-      1,
     );
 
     // Embers drift up across the arena.
@@ -481,17 +453,16 @@ export function mountBattleScene(scene: Scene, deps: BattleSceneDeps): () => voi
       if (!ember) continue;
       const life = (now - ember.bornAt) / EMBER_LIFE_MS;
       if (life >= 1) {
-        emberLayer.remove(ember.mesh);
-        ember.mesh.geometry.dispose();
-        ember.material.dispose();
+        emberLayer.removeChild(ember.graphic);
+        ember.graphic.destroy();
         embers.splice(i, 1);
         continue;
       }
       const x = rect.left + ember.xFraction * w + Math.sin(now / 700 + ember.xFraction * 20) * ember.sway;
       const y = groundY + h * 0.08 - life * h * 0.5;
-      ember.mesh.position.set(x, y, 0);
-      ember.mesh.scale.set(ember.size, ember.size, 1);
-      ember.material.opacity =
+      ember.graphic.position.set(x, y);
+      ember.graphic.scale.set(ember.size);
+      ember.graphic.alpha =
         life < 0.15 ? (life / 0.15) * 0.55 : 0.55 * (1 - phaseT(life, 0.15, 1));
     }
   };
@@ -508,6 +479,7 @@ export function mountBattleScene(scene: Scene, deps: BattleSceneDeps): () => voi
     unsubscribeWon();
     unsubscribeLost();
     unsubscribeStage();
-    scene.remove(sceneRoot);
+    stage.removeChild(sceneRoot);
+    sceneRoot.destroy({ children: true });
   };
 }

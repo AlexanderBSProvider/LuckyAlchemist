@@ -5,7 +5,7 @@ import { battleConfig, stages } from "./data";
 import { RARITY_TINTS, rarityCssColor } from "./data/rarity-visuals";
 import type { RarityTier } from "./data/schemas";
 import { createLocalAdapter } from "./platform/local";
-import { createThreeApp } from "./render/three-app";
+import { createPixiApp } from "./render/pixi-app";
 import { mountBattleScene } from "./render/battle-scene";
 import { mountCauldronScene } from "./render/cauldron-scene";
 import { performFight } from "./store/actions";
@@ -20,7 +20,7 @@ import { mountLabPanel } from "./ui/lab-panel";
 /**
  * Composition root: the one place allowed to import from every layer (core, store,
  * platform, render, ui) and wire them together. Nothing below here should ever import
- * `main.ts`. `render/` (Three.js, the scene) and `ui/` (DOM, the interface on top of it) are
+ * `main.ts`. `render/` (Pixi, the scene) and `ui/` (DOM, the interface on top of it) are
  * independent siblings — this is the one place that hands `render/` a DOM anchor owned by
  * `ui/`, since the two leaf layers must not import each other (ARCHITECTURE.md §1/§6).
  */
@@ -40,13 +40,13 @@ async function bootstrap(): Promise<void> {
     throw new Error("main.ts: #app root element not found");
   }
 
-  // Rarity colors live in data/rarity-visuals.ts (shared with the Three.js renderer, which
+  // Rarity colors live in data/rarity-visuals.ts (shared with the Pixi renderer, which
   // can't read CSS variables); the DOM side receives them as --rarity-* custom properties.
   for (const tier of Object.keys(RARITY_TINTS) as RarityTier[]) {
     document.documentElement.style.setProperty(`--rarity-${tier}`, rarityCssColor(tier));
   }
 
-  const three = createThreeApp();
+  const pixi = await createPixiApp();
 
   mountAppShell(container, { store, events, io: platform, now });
 
@@ -61,8 +61,8 @@ async function bootstrap(): Promise<void> {
     brewRng: rootRng.fork("brew"),
     distillRng: rootRng.fork("distill"),
   });
-  mountBattleScene(three.scene, { events, store, ticker: three.ticker, anchor: lab.battleAnchor });
-  mountCauldronScene(three.scene, { events, ticker: three.ticker, anchor: lab.cauldronAnchor });
+  mountBattleScene(pixi.stage, { events, store, ticker: pixi.ticker, anchor: lab.battleAnchor });
+  mountCauldronScene(pixi.stage, { events, ticker: pixi.ticker, anchor: lab.cauldronAnchor });
 
   // Auto-battle driver: the alchemist fights the current stage on a fixed cadence
   // (data/battle.json), no button. The timer lives here in the composition root — core
