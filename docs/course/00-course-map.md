@@ -22,7 +22,7 @@
 | 1 | TypeScript у бою: типи як контракти, чисті функції, seeded PRNG, перші тести Vitest | 02 | Етап 0 |
 | 2 | Архітектура: шари, напрямок залежностей, власний reactive store, event bus, сейви й міграції | 03 | Етап 0 |
 | 3 | DOM UI без фреймворка: компоненти-функції, підписки, життєвий цикл, CSS-система «Ґримуар» | — | Етап 1 |
-| 4 | PixiJS з нуля: Application/Container/Graphics/Text, кільця казана, частинки (плюс коротка згадка чому проєкт пробував і відкотив Three.js — `THREEJS-MIGRATION.md`) | — | Етап 1 |
+| 4 | PixiJS з нуля: Application/Container/Graphics/Text, кільця казана, частинки, asset-пайплайн і ліцензії (плюс коротка згадка чому проєкт пробував і відкотив Three.js — `THREEJS-MIGRATION.md`) | 04 | Етап 1 |
 | 5 | Ігрова математика: ваги, розподіли, pity-система, push-your-luck EV; econ-sim як інструмент | — | Етап 1 |
 | 6 | Тестування глибше: property-based тести, тести міграцій, econ-sim у CI, Playwright-смоук | — | Етап 1–2 |
 | 7 | Соковитість кодом: тайминги, easing, screen shake, звук (Howler), near-miss | — | Етап 2 |
@@ -37,6 +37,7 @@
 | 01 | [01-tooling.md](01-tooling.md) | 0 |
 | 02 | [02-typescript-and-rng.md](02-typescript-and-rng.md) | 1 |
 | 03 | [03-architecture-store-saves.md](03-architecture-store-saves.md) | 2 |
+| 04 | [04-pixi-render.md](04-pixi-render.md) | 4 |
 
 Нові уроки з'являються тут по мірі проходження ROADMAP.md — цей файл оновлюється в тому
 ж коміті, що і сам урок.
