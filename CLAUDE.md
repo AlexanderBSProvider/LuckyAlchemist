@@ -49,7 +49,10 @@ React, Zustand — evaluated and rejected for this project (see plan history).
 State management is a small hand-rolled store in `src/store/` — that's deliberate, not
 a placeholder for "add a framework later".
 
-Three.js *was* on this rejected list; the owner reversed that call to move `render/` from
-PixiJS to Three.js (see [docs/THREEJS-MIGRATION.md](docs/THREEJS-MIGRATION.md) for the
-rationale and the "variant A" 2.5D approach — ortho camera, flat sprites/meshes, no new 3D
-art pipeline yet).
+Three.js *was* on this rejected list; the owner reversed that call once already to move
+`render/` from PixiJS to Three.js (see
+[docs/THREEJS-MIGRATION.md](docs/THREEJS-MIGRATION.md) for the rationale and the "variant A"
+2.5D approach). **This branch (`render/pixi`) reverses it a second time**, back to PixiJS —
+`main` stays on Three.js; this is a branch-scoped experiment, not a project-wide re-reversal
+of the decision above. See [docs/ARCHITECTURE.md §6](docs/ARCHITECTURE.md) for the
+architecture as it stands on this branch.
