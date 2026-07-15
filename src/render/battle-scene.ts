@@ -1,4 +1,4 @@
-import { AnimatedSprite, Container, Graphics, Sprite, Texture, type Text } from "pixi.js";
+import { AnimatedSprite, Container, Graphics, Sprite, Texture } from "pixi.js";
 import { createAnimationTokenGuard } from "../lib/animation-token";
 import { stages } from "../data";
 import { foeGlyphFor } from "../data/glyphs";
@@ -7,9 +7,11 @@ import type { EventBus, GameEventMap } from "../store/events";
 import type { GameState } from "../store/game-state";
 import type { Store } from "../store/store";
 import { loadSlashFrames } from "./fx-textures";
-import { createGlyphText, updateGlyphText } from "./glyph-text";
 import { loadIconTexture } from "./icon-textures";
 import type { RenderTicker } from "./pixi-app";
+import { createGlyphRig, type GlyphRig } from "./rig/fighter-rig";
+import { createHeroRig, type HeroRig } from "./rig/hero-rig";
+import { mutationLoadout } from "./rig/mutation-visuals";
 
 export interface BattleSceneDeps {
   events: EventBus<GameEventMap>;
@@ -31,7 +33,6 @@ const COLOR_HERO = 0x3fa372; // hero rune (--color-success emerald)
 const COLOR_GOLD = 0xc9a227; // engraved gold accents (--color-primary)
 const COLOR_LANE = 0x2e2117; // trodden battle lane
 const COLOR_LANE_LIGHT = 0x3a2c1c; // trodden-patch mist under the fighters
-const COLOR_WHITE = 0xffffff;
 const COLOR_SHADOW = 0x000000;
 const COLOR_WALL = 0x1a130c; // stone-arch silhouettes (just above the floor plane)
 const COLOR_SHELF = 0x241a11; // apothecary shelf ledge in the mid-ground
@@ -69,9 +70,7 @@ function buildVignetteTexture(): Texture {
   return Texture.from(canvas);
 }
 
-const ALCHEMIST_GLYPH = "🧙";
 const TROPHY_GLYPH = "🏆";
-const FIGHTER_FONT_SIZE = 64;
 
 /* Fight replay timings (presentation only, not balance). Total must stay comfortably
  * under data/battle.json's autoIntervalSeconds so replays never overlap. */
@@ -128,30 +127,6 @@ function buildEllipse(
   graphic.alpha = alpha;
   parent.addChild(graphic);
   return { graphic, rx, ry };
-}
-
-interface Fighter {
-  readonly text: Text;
-}
-
-function buildFighter(text: string): Fighter {
-  const glyphText = createGlyphText({
-    text,
-    fontSize: FIGHTER_FONT_SIZE,
-    color: COLOR_INK,
-    dropShadow: { color: COLOR_SHADOW, alpha: 0.6, blur: 6, distance: 4 },
-  });
-  glyphText.anchor.set(0.5, 0.78);
-  return { text: glyphText };
-}
-
-function setFighterGlyph(fighter: Fighter, text: string): void {
-  updateGlyphText(fighter.text, {
-    text,
-    fontSize: FIGHTER_FONT_SIZE,
-    color: COLOR_INK,
-    dropShadow: { color: COLOR_SHADOW, alpha: 0.6, blur: 6, distance: 4 },
-  });
 }
 
 interface Ember {
@@ -330,14 +305,18 @@ export function mountBattleScene(stage: Container, deps: BattleSceneDeps): () =>
   });
 
   // --- Fighters -------------------------------------------------------------------------
-  const hero = buildFighter(ALCHEMIST_GLYPH);
-  const foe = buildFighter(foeGlyphFor(store.getState().currentStageId));
+  // Hero is the code-drawn paper-doll alchemist (rig/hero-rig.ts); the foe is still an emoji
+  // glyph until foe-rig lands. Both satisfy the same `FighterRig` contract, so the fight
+  // choreography below never has to know which is which.
+  const heroRig: HeroRig = createHeroRig();
+  heroRig.applyMutations(mutationLoadout(store.getState().potions));
+  const foeRig: GlyphRig = createGlyphRig(foeGlyphFor(store.getState().currentStageId));
 
   // Impact flash, hidden until a clash.
   const clashFlash = flatCircle(COLOR_INK);
   clashFlash.visible = false;
 
-  sceneRoot.addChild(floor, heroCircleGroup, foeCircleGroup, clashFlash, hero.text, foe.text);
+  sceneRoot.addChild(floor, heroCircleGroup, foeCircleGroup, clashFlash, heroRig.root, foeRig.root);
   stage.addChild(sceneRoot);
 
   // --- Slash FX sprites (craftpix pack, loaded lazily via fx-textures.ts) ----------------
@@ -424,8 +403,16 @@ export function mountBattleScene(stage: Container, deps: BattleSceneDeps): () =>
       if (fightStartMs !== null) {
         pendingFoeGlyph = glyph;
       } else {
-        setFighterGlyph(foe, glyph);
+        foeRig.setGlyph(glyph);
       }
+    },
+  );
+
+  // Equipping/distilling a potion changes the mutation loadout — rebuild the hero's overlays.
+  const unsubscribePotions = store.subscribe(
+    (state) => state.potions,
+    (potions) => {
+      heroRig.applyMutations(mutationLoadout(potions));
     },
   );
 
@@ -433,11 +420,11 @@ export function mountBattleScene(stage: Container, deps: BattleSceneDeps): () =>
     fightToken = null;
     fightStartMs = null;
     clashFlash.visible = false;
-    hero.text.tint = COLOR_WHITE;
-    foe.text.tint = COLOR_WHITE;
+    heroRig.setHurt(false);
+    foeRig.setHurt(false);
     foeAlpha = 1;
     if (pendingFoeGlyph !== null) {
-      setFighterGlyph(foe, pendingFoeGlyph);
+      foeRig.setGlyph(pendingFoeGlyph);
       pendingFoeGlyph = null;
     }
   };
@@ -564,8 +551,8 @@ export function mountBattleScene(stage: Container, deps: BattleSceneDeps): () =>
         }
         shakeX = (Math.random() - 0.5) * 6 * (1 - c);
         shakeY = (Math.random() - 0.5) * 4 * (1 - c);
-        if (!fightWon && c > 0.5) hero.text.tint = COLOR_DANGER;
-        if (fightWon && c > 0.5) foe.text.tint = COLOR_DANGER;
+        if (!fightWon && c > 0.5) heroRig.setHurt(true);
+        if (fightWon && c > 0.5) foeRig.setHurt(true);
       } else if (t < PHASE_RETREAT_END) {
         clashFlash.visible = false;
         const r = easeInOut(phaseT(t, PHASE_CLASH_END, PHASE_RETREAT_END));
@@ -579,9 +566,9 @@ export function mountBattleScene(stage: Container, deps: BattleSceneDeps): () =>
           foeX = foePostX;
           foeYOffset = -aft * h * 0.1;
         } else {
-          hero.text.tint = aft < 0.5 ? COLOR_DANGER : COLOR_WHITE;
+          heroRig.setHurt(aft < 0.5);
           const pulse = 1 + Math.sin(aft * Math.PI) * 0.12;
-          foe.text.scale.set(fighterScale * pulse);
+          foeRig.root.scale.set(fighterScale * pulse);
         }
       }
 
@@ -589,7 +576,7 @@ export function mountBattleScene(stage: Container, deps: BattleSceneDeps): () =>
         const wasWin = fightWon;
         clearFight();
         if (wasWin) {
-          setFighterGlyph(foe, glyphForStage(shownStageId));
+          foeRig.setGlyph(glyphForStage(shownStageId));
           foeAlpha = 0; // fades back in below
         }
       }
@@ -599,22 +586,26 @@ export function mountBattleScene(stage: Container, deps: BattleSceneDeps): () =>
     if (fightStartMs === null && foeAlpha < 1) {
       foeAlpha = Math.min(1, foeAlpha + lastFrameDeltaMs / 400);
     }
-    foe.text.alpha = foeAlpha;
+    foeRig.root.alpha = foeAlpha;
+
+    // Rigs run their own internal life (glyph rigs are inert; code-drawn rigs sway/blink).
+    heroRig.update(now, lastFrameDeltaMs);
+    foeRig.update(now, lastFrameDeltaMs);
 
     // Idle bob (subtle, opposite phases so it reads as two living creatures).
     const bobHero = Math.sin(now / 520) * h * 0.008;
     const bobFoe = Math.sin(now / 480 + Math.PI) * h * 0.008;
 
-    hero.text.position.set(heroX + shakeX, groundY + bobHero + shakeY);
-    foe.text.position.set(
+    heroRig.root.position.set(heroX + shakeX, groundY + bobHero + shakeY);
+    foeRig.root.position.set(
       foeX + shakeX * 0.6,
       (fightStartMs !== null && fightWon ? groundY + foeYOffset : groundY + bobFoe) + shakeY * 0.6,
     );
     if (fightStartMs === null || fightWon) {
-      hero.text.scale.set(fighterScale);
+      heroRig.root.scale.set(fighterScale);
     }
     if (fightStartMs === null) {
-      foe.text.scale.set(fighterScale);
+      foeRig.root.scale.set(fighterScale);
     }
 
     heroCircleGroup.position.set(heroX, groundY + h * 0.035);
@@ -684,6 +675,7 @@ export function mountBattleScene(stage: Container, deps: BattleSceneDeps): () =>
     unsubscribeWon();
     unsubscribeLost();
     unsubscribeStage();
+    unsubscribePotions();
     stage.removeChild(sceneRoot);
     sceneRoot.destroy({ children: true });
   };

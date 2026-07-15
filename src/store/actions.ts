@@ -2,7 +2,14 @@ import type { BrewRecipe } from "../core/brewing";
 import type { Rng } from "../core/rng";
 import type { AshSiftConfig, DistillationStage, Stage } from "../data/schemas";
 import type { BrewData } from "./commands";
-import { brewCommand, distillPotion, fightStage, siftAshCommand } from "./commands";
+import {
+  brewCommand,
+  distillPotion,
+  equipPotion,
+  fightStage,
+  siftAshCommand,
+  unequipPotion,
+} from "./commands";
 import type { EventBus, GameEventMap } from "./events";
 import type { GameState } from "./game-state";
 import type { Store } from "./store";
@@ -94,6 +101,49 @@ export function performFight(
   }
 
   events.emit("battle:lost", { stageId: stage.id });
+}
+
+/**
+ * Equips a potion (the brewed mutation) and, only if it actually flipped from unequipped
+ * to equipped, emits `mutation:equipped` so render can play the "drink + transform"
+ * ceremony. A no-op equip (slots already full) emits nothing — same convention as
+ * `performFight`'s loss path.
+ */
+export function performEquip(
+  store: Store<GameState>,
+  events: EventBus<GameEventMap>,
+  potionId: string,
+  maxEquippedSlots: number,
+): void {
+  const before = store.getState();
+  const wasEquipped = before.potions.find((potion) => potion.id === potionId)?.equipped ?? false;
+  if (wasEquipped) return;
+
+  store.dispatch(equipPotion(potionId, maxEquippedSlots));
+  const after = store.getState();
+
+  const potion = after.potions.find((candidate) => candidate.id === potionId);
+  if (potion?.equipped) {
+    events.emit("mutation:equipped", {
+      potionId: potion.id,
+      symbolId: potion.symbolId,
+      rarity: potion.rarity,
+      grade: potion.grade,
+    });
+  }
+}
+
+export function performUnequip(
+  store: Store<GameState>,
+  events: EventBus<GameEventMap>,
+  potionId: string,
+): void {
+  const before = store.getState();
+  const wasEquipped = before.potions.find((potion) => potion.id === potionId)?.equipped ?? false;
+  if (!wasEquipped) return;
+
+  store.dispatch(unequipPotion(potionId));
+  events.emit("mutation:unequipped", { potionId });
 }
 
 export function performSift(

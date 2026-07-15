@@ -24,6 +24,8 @@ export type GameEventMap = {
   "brew:fail": undefined;
   "distill:advance": { potionId: string; grade: GradeId };
   "distill:burst": { potionId: string };
+  "mutation:equipped": { potionId: string; symbolId: string; rarity: RarityTier; grade: GradeId };
+  "mutation:unequipped": { potionId: string };
   "battle:won": {
     stageId: number;
     rewardGold: number;

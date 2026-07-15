@@ -13,8 +13,14 @@ import {
 } from "../data";
 import { elementIconName } from "../data/glyphs";
 import type { GradeId, RarityTier } from "../data/schemas";
-import { performBrew, performDistill, performSift } from "../store/actions";
-import { buyUpgrade, equipPotion, unequipPotion } from "../store/commands";
+import {
+  performBrew,
+  performDistill,
+  performEquip,
+  performSift,
+  performUnequip,
+} from "../store/actions";
+import { buyUpgrade } from "../store/commands";
 import type { EventBus, GameEventMap } from "../store/events";
 import type { GameState } from "../store/game-state";
 import { playerPower } from "../store/selectors";
@@ -446,11 +452,11 @@ export function mountLabPanel(container: HTMLElement, deps: LabPanelDeps): LabPa
         equipButton.disabled =
           !potion.equipped && equipped.length >= mutationConfig.maxEquippedSlots;
         equipButton.addEventListener("click", () => {
-          store.dispatch(
-            potion.equipped
-              ? unequipPotion(potion.id)
-              : equipPotion(potion.id, mutationConfig.maxEquippedSlots),
-          );
+          if (potion.equipped) {
+            performUnequip(store, events, potion.id);
+          } else {
+            performEquip(store, events, potion.id, mutationConfig.maxEquippedSlots);
+          }
         });
 
         item.append(tile, info, distillButton, equipButton);
