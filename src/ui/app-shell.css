@@ -19,13 +19,30 @@
 .app-shell__title {
   flex: 0 1 auto;
   min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
   font-family: var(--font-display);
   font-weight: 700;
   font-size: 1.15rem;
   color: var(--color-ink);
   white-space: nowrap;
   overflow: hidden;
+}
+
+.app-shell__word {
+  min-width: 0;
+  overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* Engraved gold gravure flanking the wordmark (game-icons). */
+.app-shell__mark {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  color: var(--color-primary);
+  opacity: 0.85;
 }
 
 .app-shell__side {

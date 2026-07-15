@@ -1,4 +1,5 @@
 import "./app-shell.css";
+import { iconEl } from "./icons";
 import type { GameEventMap } from "../store/events";
 import type { EventBus } from "../store/events";
 import type { GameState } from "../store/game-state";
@@ -26,9 +27,15 @@ export function mountAppShell(container: HTMLElement, deps: AppShellDeps): () =>
   const root = document.createElement("header");
   root.className = "app-shell";
 
+  // Brand lockup: an engraved cauldron flourish flanking the wordmark — a small gravure
+  // divider so the title reads as a grimoire heading, not plain text.
   const title = document.createElement("h1");
   title.className = "app-shell__title";
-  title.textContent = "Lucky Alchemist";
+  const mark = iconEl("tab-brew", "app-shell__mark");
+  const wordmark = document.createElement("span");
+  wordmark.className = "app-shell__word";
+  wordmark.textContent = "Lucky Alchemist";
+  title.append(mark, wordmark, iconEl("flask-tincture", "app-shell__mark"));
 
   const side = document.createElement("div");
   side.className = "app-shell__side";

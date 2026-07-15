@@ -11,7 +11,7 @@ import {
   symbols,
   upgrades,
 } from "../data";
-import { glyphFor } from "../data/glyphs";
+import { elementIconName } from "../data/glyphs";
 import type { GradeId, RarityTier } from "../data/schemas";
 import { performBrew, performDistill, performSift } from "../store/actions";
 import { buyUpgrade, equipPotion, unequipPotion } from "../store/commands";
@@ -20,7 +20,10 @@ import type { GameState } from "../store/game-state";
 import { playerPower } from "../store/selectors";
 import type { Store } from "../store/store";
 import { createAshScratch } from "./ash-scratch";
+import { iconEl } from "./icons";
+import type { IconName } from "../data/icon-paths";
 import { ingredientIconEl } from "./ingredient-icons";
+import { potionIconEl } from "./potion-icon";
 
 export interface LabPanelDeps {
   store: Store<GameState>;
@@ -109,11 +112,11 @@ const TAB_LABELS: Record<TabId, string> = {
   lab: "Lab",
 };
 
-/** Tab icons — engraved unicode glyphs, same no-asset convention as data/glyphs.ts. */
-const TAB_ICONS: Record<TabId, string> = {
-  brew: "⚗",
-  potions: "🜛",
-  lab: "🜍",
+/** Tab icons — engraved game-icons gravures (src/ui/icons.ts): flask / potion / mortar. */
+const TAB_ICONS: Record<TabId, IconName> = {
+  brew: "tab-brew",
+  potions: "tab-potions",
+  lab: "tab-lab",
 };
 
 /** The alchemist's own face glyph, mirrored from render/battle-scene.ts's ALCHEMIST_GLYPH. */
@@ -163,11 +166,11 @@ export function mountLabPanel(container: HTMLElement, deps: LabPanelDeps): LabPa
   const goldChip = el("span", "hud__res hud__res--gold");
   goldChip.title = "Gold";
   const goldText = makeOutlinedText();
-  goldChip.append(goldText.holder);
+  goldChip.append(iconEl("coin", "hud__icon"), goldText.holder);
   const ashChip = el("span", "hud__res hud__res--ash");
   ashChip.title = "Ash";
   const ashText = makeOutlinedText();
-  ashChip.append(ashText.holder);
+  ashChip.append(iconEl("ash", "hud__icon"), ashText.holder);
   hud.append(goldChip, ashChip);
 
   // Hero medallion (top-left of the scene, like the reference's avatar+level): the
@@ -263,10 +266,9 @@ export function mountLabPanel(container: HTMLElement, deps: LabPanelDeps): LabPa
   for (const id of TAB_IDS) {
     const tabButton = el("button", "tabs__btn");
     tabButton.type = "button";
-    tabButton.append(
-      el("span", "tabs__icon", TAB_ICONS[id]),
-      el("span", "tabs__label", TAB_LABELS[id]),
-    );
+    const tabIcon = el("span", "tabs__icon");
+    tabIcon.append(iconEl(TAB_ICONS[id]));
+    tabButton.append(tabIcon, el("span", "tabs__label", TAB_LABELS[id]));
     tabButton.addEventListener("click", () => {
       setTab(id);
     });
@@ -275,8 +277,15 @@ export function mountLabPanel(container: HTMLElement, deps: LabPanelDeps): LabPa
   }
   const setTab = (active: TabId): void => {
     for (const id of TAB_IDS) {
-      panels[id].hidden = id !== active;
-      tabButtons[id].classList.toggle("tabs__btn--active", id === active);
+      const isActive = id === active;
+      panels[id].hidden = !isActive;
+      tabButtons[id].classList.toggle("tabs__btn--active", isActive);
+      if (isActive) {
+        // Re-trigger the panel's fade/slide-in each time it's shown.
+        panels[id].classList.remove("panel--enter");
+        void panels[id].offsetWidth;
+        panels[id].classList.add("panel--enter");
+      }
     }
   };
   setTab("brew");
@@ -292,8 +301,8 @@ export function mountLabPanel(container: HTMLElement, deps: LabPanelDeps): LabPa
 
   const renderResources = (state: GameState): void => {
     const { gold, ash } = state.resources;
-    goldText.set(`☉ ${String(gold)}`);
-    ashText.set(`Ash ${String(ash)}`);
+    goldText.set(String(gold));
+    ashText.set(String(ash));
     if (prevGold !== null && gold !== prevGold) pulse(goldChip);
     if (prevAsh !== null && ash !== prevAsh) pulse(ashChip);
     prevGold = gold;
@@ -375,10 +384,14 @@ export function mountLabPanel(container: HTMLElement, deps: LabPanelDeps): LabPa
       ...Array.from({ length: mutationConfig.maxEquippedSlots }, (_, i) => {
         const potion = equipped[i];
         if (!potion) return el("span", "slot");
-        const slot = el(
-          "span",
-          `slot slot--filled rar-${potion.rarity}`,
-          glyphFor(potion.symbolId),
+        const slot = el("span", `slot slot--filled rar-${potion.rarity}`);
+        slot.append(
+          potionIconEl({
+            grade: potion.grade,
+            rarity: potion.rarity,
+            symbolId: potion.symbolId,
+            className: "slot__potion",
+          }),
         );
         slot.title = `${symbolLabel(potion.symbolId)} · ${RARITY_LABELS[potion.rarity]}`;
         return slot;
@@ -387,7 +400,11 @@ export function mountLabPanel(container: HTMLElement, deps: LabPanelDeps): LabPa
 
     if (state.potions.length === 0) {
       potionsList.replaceChildren(
-        el("li", "potions-list__empty", "The shelf is empty — brew your first potion in the cauldron."),
+        el(
+          "li",
+          "potions-list__empty",
+          "The shelf is empty — brew your first potion in the cauldron.",
+        ),
       );
       return;
     }
@@ -395,7 +412,15 @@ export function mountLabPanel(container: HTMLElement, deps: LabPanelDeps): LabPa
     potionsList.replaceChildren(
       ...state.potions.map((potion) => {
         const item = el("li", `potion${potion.equipped ? " potion--equipped" : ""}`);
-        const tile = el("span", `potion__tile rar-${potion.rarity}`, glyphFor(potion.symbolId));
+        const tile = el("span", `potion__tile rar-${potion.rarity}`);
+        tile.append(
+          potionIconEl({
+            grade: potion.grade,
+            rarity: potion.rarity,
+            symbolId: potion.symbolId,
+            className: "potion__tile-icon",
+          }),
+        );
         const info = el("span", "potion__info");
         const name = el(
           "span",
@@ -506,29 +531,38 @@ export function mountLabPanel(container: HTMLElement, deps: LabPanelDeps): LabPa
     rollsRow.replaceChildren(
       ...rolls.map((roll, i) => {
         const rarityClass = outcome.kind === "success" ? ` rar-${outcome.rarity}` : "";
-        const node = el(
-          "span",
-          `roll ${roll.hit ? `roll--hit${rarityClass}` : "roll--miss"}`,
-          glyphFor(roll.symbolId),
-        );
+        const node = el("span", `roll ${roll.hit ? `roll--hit${rarityClass}` : "roll--miss"}`);
+        node.append(iconEl(elementIconName(roll.symbolId), "roll__icon"));
         node.style.animationDelay = `${String(0.9 + i * 0.45)}s`;
         return node;
       }),
     );
 
-    const banner =
-      outcome.kind === "success"
-        ? el(
-            "p",
-            `scene__banner-text rar-${outcome.rarity}`,
-            `Brewed: ${RARITY_LABELS[outcome.rarity]} "${symbolLabel(outcome.symbolId)}"` +
-              (outcome.triple ? " — triple match!" : ""),
-          )
-        : el(
-            "p",
-            "scene__banner-text scene__banner-text--fail",
-            "No match — ingredients burned to ash.",
-          );
+    let banner: HTMLParagraphElement;
+    if (outcome.kind === "success") {
+      banner = el("p", `scene__banner-text rar-${outcome.rarity}`);
+      // Fresh brews are tinctures (store/commands.ts) — show that flask, rarity-tinted.
+      banner.append(
+        potionIconEl({
+          grade: "tincture",
+          rarity: outcome.rarity,
+          symbolId: outcome.symbolId,
+          className: "scene__banner-icon",
+        }),
+        el(
+          "span",
+          "",
+          `Brewed: ${RARITY_LABELS[outcome.rarity]} "${symbolLabel(outcome.symbolId)}"` +
+            (outcome.triple ? " — triple match!" : ""),
+        ),
+      );
+    } else {
+      banner = el(
+        "p",
+        "scene__banner-text scene__banner-text--fail",
+        "No match — ingredients burned to ash.",
+      );
+    }
     banner.addEventListener(
       "animationend",
       () => {
@@ -576,6 +610,12 @@ export function mountLabPanel(container: HTMLElement, deps: LabPanelDeps): LabPa
       });
     },
   );
+  // Light frame-shake on a defeat, on top of the Pixi in-scene shake. Re-triggered each loss.
+  const unsubscribeBattleLost = events.on("battle:lost", () => {
+    scene.classList.remove("scene--shake");
+    void scene.offsetWidth;
+    scene.classList.add("scene--shake");
+  });
   const unsubscribeBrewSuccess = events.on("brew:success", ({ symbolId, rarity, triple }) => {
     playBrewScene({ kind: "success", symbolId, rarity, triple });
   });
@@ -612,6 +652,7 @@ export function mountLabPanel(container: HTMLElement, deps: LabPanelDeps): LabPa
       unsubscribeUpgrades();
       unsubscribePotions();
       unsubscribeBattleWon();
+      unsubscribeBattleLost();
       unsubscribeBrewSuccess();
       unsubscribeBrewFail();
       unsubscribeAshSifted();

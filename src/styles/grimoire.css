@@ -63,9 +63,7 @@
   --radius-pill: 999px;
   --border-subtle: 1px solid var(--color-line);
   /* Card lift: a soft ambient drop that reads as depth on the near-black deck. */
-  --shadow-card:
-    0 1px 2px rgba(0, 0, 0, 0.4),
-    0 6px 16px rgba(0, 0, 0, 0.5);
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4), 0 6px 16px rgba(0, 0, 0, 0.5);
   --shadow-inset: inset 0 2px 4px rgba(0, 0, 0, 0.55);
   /* Overlay text over the arena needs a dark halo to stay legible over glow/embers. */
   --scene-text-shadow: 0 2px 6px rgba(8, 6, 4, 0.75);
@@ -121,6 +119,21 @@ body {
   padding: var(--space-2) var(--space-2) 0;
   gap: var(--space-2);
   overflow: hidden;
+  /* Start faded out; main.ts stamps `app-ready` on <html> once fonts settle, so the first
+   * paint isn't the unstyled-content jump. The DOM only exists after JS mounts it, so a
+   * default of 0 can never leave a JS-less page blank. */
+  opacity: 0;
+}
+
+:root.app-ready #app {
+  opacity: 1;
+  transition: opacity 0.45s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root.app-ready #app {
+    transition: none;
+  }
 }
 
 h1,

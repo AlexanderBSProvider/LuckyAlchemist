@@ -81,6 +81,12 @@ async function bootstrap(): Promise<void> {
   }, battleConfig.autoIntervalSeconds * 1000);
 
   platform.gameplayStart();
+
+  // Fade the app in once the self-hosted fonts are ready (see #app in grimoire.css) — avoids
+  // the flash of unstyled, fallback-font content on first paint.
+  void document.fonts.ready.then(() => {
+    document.documentElement.classList.add("app-ready");
+  });
 }
 
 void bootstrap();

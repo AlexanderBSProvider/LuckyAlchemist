@@ -1,37 +1,31 @@
 /**
- * Presentation-only mapping: ingredient id → icon from the craftpix vegetables pack
- * (src/assets/craftpix-net-717437…, docs/CREDITS.md). Lives in ui/, not data/ — icon
- * files are cosmetics, and data/*.json stays balance-only (CLAUDE.md rule 2).
+ * Presentation-only mapping: ingredient id → engraved game-icons reagent (src/ui/icons.ts,
+ * src/data/icon-paths.ts). Lives in ui/, not data/ — icon choices are cosmetics, and
+ * data/*.json stays balance-only (CLAUDE.md rule 2).
  *
- * The mapping is curated and deliberately partial: an ingredient only gets an icon when
- * some pack image genuinely reads as that reagent on the dark deck; the rest keep their
- * text-only chips. Icon PNGs are ~250×250 with a thick dark outline, shown at ~20px.
+ * Replaces the old craftpix vegetable PNGs: those read as produce, not reagents, and clashed
+ * with the dark engraved "Grimoire" look. Every reagent now has an icon in the one gravure
+ * style; the SVGs are `currentColor`, so each inherits the surrounding text color.
  */
-import clayShardUrl from "../assets/craftpix-net-717437-free-vegetables-vector-icon-pack-for-rpg/PNG/without_shadow/31.png";
-import dryTinderUrl from "../assets/craftpix-net-717437-free-vegetables-vector-icon-pack-for-rpg/PNG/without_shadow/23.png";
-import firebrandRootUrl from "../assets/craftpix-net-717437-free-vegetables-vector-icon-pack-for-rpg/PNG/without_shadow/45.png";
-import quicksilverUrl from "../assets/craftpix-net-717437-free-vegetables-vector-icon-pack-for-rpg/PNG/without_shadow/39.png";
+import type { IconName } from "../data/icon-paths";
+import { iconEl } from "./icons";
 
-const ICON_URLS: Readonly<Record<string, string>> = {
-  "dry-tinder": dryTinderUrl, // dried herb bundle — kindling
-  "clay-shard": clayShardUrl, // rough earthen root — clay lump
-  "firebrand-root": firebrandRootUrl, // fiery orange root
-  quicksilver: quicksilverUrl, // pale round orb — quicksilver bead
-  // "spring-water" has no convincing match in the pack — text-only chip.
+const ICON_NAMES: Readonly<Record<string, IconName>> = {
+  "dry-tinder": "ing-dry-tinder", // bundle of dead branches — kindling
+  "clay-shard": "ing-clay-shard", // broken earthen pottery
+  "firebrand-root": "ing-firebrand-root", // gnarled fiery root
+  quicksilver: "ing-quicksilver", // bead of chemical/metal liquid
+  "spring-water": "ing-spring-water", // paired water droplets
 };
 
-/** Returns the icon URL for an ingredient, or undefined when it has none. */
-export function ingredientIconUrl(id: string): string | undefined {
-  return ICON_URLS[id];
+/** Returns the icon name for an ingredient, or undefined when it has none. */
+export function ingredientIconName(id: string): IconName | undefined {
+  return ICON_NAMES[id];
 }
 
-/** Builds the small inline `<img>` used inside chips and captions. */
-export function ingredientIconEl(id: string, className: string): HTMLImageElement | undefined {
-  const url = ingredientIconUrl(id);
-  if (url === undefined) return undefined;
-  const img = document.createElement("img");
-  img.src = url;
-  img.alt = ""; // decorative — the adjacent text names the ingredient
-  img.className = className;
-  return img;
+/** Builds the small inline `<svg>` used inside chips and captions. */
+export function ingredientIconEl(id: string, className: string): SVGSVGElement | undefined {
+  const name = ingredientIconName(id);
+  if (name === undefined) return undefined;
+  return iconEl(name, className);
 }

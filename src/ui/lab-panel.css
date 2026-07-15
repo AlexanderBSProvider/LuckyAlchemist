@@ -144,6 +144,15 @@
   color: var(--color-ink-dim);
 }
 
+/* Engraved coin/ash gravure (game-icons) inside each chip; inherits the chip's currentColor
+ * (gold / dim ink) via fill="currentColor". */
+.hud__icon {
+  width: 15px;
+  height: 15px;
+  margin-right: 5px;
+  flex: none;
+}
+
 .pulse {
   animation: res-pulse 0.5s ease-out;
 }
@@ -358,6 +367,23 @@
   filter: grayscale(0.5) brightness(0.96);
 }
 
+/* Engraved element gravure inside a roll (game-icons). Hits glow in the rarity tint, misses
+ * read as dim ink. */
+.roll__icon {
+  width: 26px;
+  height: 26px;
+  display: block;
+  color: var(--color-ink);
+}
+
+.roll--hit .roll__icon {
+  color: var(--rar, var(--color-gold));
+}
+
+.roll--miss .roll__icon {
+  color: var(--color-ink-dim);
+}
+
 .scene__banner {
   position: absolute;
   left: 0;
@@ -368,7 +394,9 @@
 }
 
 .scene__banner-text {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   margin: 0;
   padding: 3px var(--space-3);
   font-family: var(--font-display);
@@ -428,8 +456,16 @@
 }
 
 .tabs__icon {
-  font-size: 1.15rem;
+  display: inline-flex;
   line-height: 1;
+}
+
+/* Engraved tab gravure (game-icons), tinted by the button's currentColor (dim when idle,
+ * gold when active). */
+.tabs__icon svg {
+  width: 20px;
+  height: 20px;
+  display: block;
 }
 
 .tabs__btn:hover:not(.tabs__btn--active) {
@@ -475,6 +511,56 @@
 
 .panel[hidden] {
   display: none;
+}
+
+/* Tab switch: the freshly shown panel fades and slides up briefly (retriggered in setTab). */
+.panel--enter {
+  animation: panel-enter 0.16s ease-out;
+}
+
+@keyframes panel-enter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Defeat frame-shake: a short decaying jitter of the whole scene box (added on battle:lost),
+ * layered on top of the Pixi in-scene shake. */
+.scene--shake {
+  animation: scene-shake 0.4s ease-out;
+}
+
+@keyframes scene-shake {
+  10%,
+  30%,
+  50%,
+  70% {
+    transform: translateX(-3px);
+  }
+  20%,
+  40%,
+  60% {
+    transform: translateX(3px);
+  }
+  80% {
+    transform: translateX(1px);
+  }
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .panel--enter,
+  .scene--shake {
+    animation: none;
+  }
 }
 
 /* Brew tab hosts the cauldron scene drawn onto the shared background canvas (behind the
@@ -633,12 +719,17 @@
   outline-offset: 2px;
 }
 
-/* Reagent icons (craftpix vegetables pack, mapped in ingredient-icons.ts). Their thick
- * dark outlines read well at chip size on the dark leather surfaces. */
+/* Reagent gravures (game-icons, mapped in ingredient-icons.ts). `currentColor` SVGs, so they
+ * take the chip's ink color and its gold shift when the reagent is selected. */
 .chip__icon {
   width: 20px;
   height: 20px;
   display: block;
+  color: var(--color-ink-dim);
+}
+
+.chip input:checked + .chip__face .chip__icon {
+  color: var(--color-primary);
 }
 
 .scene__reward-icon {
@@ -744,11 +835,56 @@
   height: 44px;
   display: grid;
   place-items: center;
-  font-size: 1.4rem;
   border-radius: var(--radius);
   background: var(--color-surface);
   border: 2px solid var(--rar, var(--color-line-strong));
   color: var(--rar, var(--color-ink));
+}
+
+/* --- Combinatorial potion sigil (potion-icon.ts): flask × rarity tint × element stamp --- */
+.potion-icon {
+  position: relative;
+  display: grid;
+  place-items: center;
+  line-height: 0;
+}
+
+/* The flask silhouette takes the rarity color (--rar, set by the wrapper's rar-* class or
+ * inherited from the host tile/slot). */
+.potion-icon__flask {
+  width: 100%;
+  height: 100%;
+  display: block;
+  color: var(--rar, var(--color-ink));
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.55));
+}
+
+/* Element symbol stamped over the flask belly, in the dark inverse ink so it reads on the
+ * bright liquid. */
+.potion-icon__stamp {
+  position: absolute;
+  left: 50%;
+  top: 56%;
+  width: 40%;
+  height: 40%;
+  transform: translate(-50%, -50%);
+  color: var(--color-ink-inverse);
+  opacity: 0.82;
+}
+
+.potion__tile-icon {
+  width: 36px;
+  height: 36px;
+}
+
+.slot__potion {
+  width: 74%;
+  height: 74%;
+}
+
+.scene__banner-icon {
+  width: 20px;
+  height: 20px;
 }
 
 .potion__info {

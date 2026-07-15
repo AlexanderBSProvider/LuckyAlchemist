@@ -1,12 +1,14 @@
-import { AnimatedSprite, Container, Graphics, type Text } from "pixi.js";
+import { AnimatedSprite, Container, Graphics, Sprite, Texture, type Text } from "pixi.js";
 import { createAnimationTokenGuard } from "../lib/animation-token";
 import { stages } from "../data";
 import { foeGlyphFor } from "../data/glyphs";
+import type { IconName } from "../data/icon-paths";
 import type { EventBus, GameEventMap } from "../store/events";
 import type { GameState } from "../store/game-state";
 import type { Store } from "../store/store";
 import { loadSlashFrames } from "./fx-textures";
 import { createGlyphText, updateGlyphText } from "./glyph-text";
+import { loadIconTexture } from "./icon-textures";
 import type { RenderTicker } from "./pixi-app";
 
 export interface BattleSceneDeps {
@@ -31,6 +33,41 @@ const COLOR_LANE = 0x2e2117; // trodden battle lane
 const COLOR_LANE_LIGHT = 0x3a2c1c; // trodden-patch mist under the fighters
 const COLOR_WHITE = 0xffffff;
 const COLOR_SHADOW = 0x000000;
+const COLOR_WALL = 0x1a130c; // stone-arch silhouettes (just above the floor plane)
+const COLOR_SHELF = 0x241a11; // apothecary shelf ledge in the mid-ground
+const COLOR_RUNE = 0xc9a227; // engraved gold rune circle + shelf decor (--color-primary)
+
+// Faint engraved props on the mid-ground shelf, laid out left→right as x-fractions.
+const SHELF_DECOR: readonly { icon: IconName; xFraction: number; scale: number }[] = [
+  { icon: "book", xFraction: 0.12, scale: 1 },
+  { icon: "skull", xFraction: 0.3, scale: 0.9 },
+  { icon: "flask-grand", xFraction: 0.7, scale: 0.95 },
+  { icon: "book", xFraction: 0.88, scale: 0.85 },
+];
+
+/** Radial vignette baked once to a canvas texture — transparent center, dark soft edges. */
+function buildVignetteTexture(): Texture {
+  const size = 256;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d");
+  if (ctx) {
+    const g = ctx.createRadialGradient(
+      size / 2,
+      size / 2,
+      size * 0.28,
+      size / 2,
+      size / 2,
+      size * 0.62,
+    );
+    g.addColorStop(0, "rgba(0,0,0,0)");
+    g.addColorStop(1, "rgba(0,0,0,0.62)");
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, size, size);
+  }
+  return Texture.from(canvas);
+}
 
 const ALCHEMIST_GLYPH = "🧙";
 const TROPHY_GLYPH = "🏆";
@@ -182,11 +219,90 @@ export function mountBattleScene(stage: Container, deps: BattleSceneDeps): () =>
     return { container: group, halo, flame, xFraction, scale, flickerPhase };
   };
 
-  const candleProps: CandleProp[] = [
-    buildCandleProp(0.07, 1, 0),
-    buildCandleProp(0.93, 1.1, 2.1),
-  ];
+  const candleProps: CandleProp[] = [buildCandleProp(0.07, 1, 0), buildCandleProp(0.93, 1.1, 2.1)];
   for (const prop of candleProps) backdrop.addChild(prop.container);
+
+  // --- Far scenery layer: stone arches + apothecary shelf --------------------------------
+  // Authored in local coordinates (origin at the scene's top-left); the layer is moved to
+  // the anchor's screen rect each frame and its geometry only rebuilt when the size changes.
+  const farLayer = new Container();
+  backdrop.addChild(farLayer);
+  const archWall = new Graphics();
+  const shelf = new Graphics();
+  farLayer.addChild(archWall, shelf);
+  const decorSprites = SHELF_DECOR.map((decor) => {
+    const sprite = new Sprite(Texture.EMPTY);
+    sprite.anchor.set(0.5, 1);
+    sprite.alpha = 0.16; // ghosted engraving, not a foreground object
+    void loadIconTexture(decor.icon, COLOR_RUNE, 96).then((texture) => {
+      sprite.texture = texture;
+    });
+    farLayer.addChild(sprite);
+    return { sprite, decor };
+  });
+  let lastFarW = 0;
+  let lastFarH = 0;
+  const layoutFarLayer = (w: number, h: number): void => {
+    if (Math.abs(w - lastFarW) < 1 && Math.abs(h - lastFarH) < 1) return;
+    lastFarW = w;
+    lastFarH = h;
+    // Back wall: a row of dim arch silhouettes across the top band.
+    archWall.clear();
+    const count = 5;
+    const bandTop = h * 0.06;
+    const archW = w / count;
+    const archH = h * 0.28;
+    const radius = archW * 0.34;
+    for (let i = 0; i < count; i++) {
+      const cx = archW * (i + 0.5);
+      const legTop = bandTop + radius;
+      archWall
+        .moveTo(cx - radius, bandTop + archH)
+        .lineTo(cx - radius, legTop)
+        .arc(cx, legTop, radius, Math.PI, 0)
+        .lineTo(cx + radius, bandTop + archH)
+        .closePath()
+        .fill({ color: COLOR_WALL, alpha: 0.55 });
+    }
+    // Apothecary shelf ledge in the mid-ground.
+    const shelfY = h * 0.3;
+    shelf.clear();
+    shelf
+      .rect(w * 0.04, shelfY, w * 0.92, Math.max(2, h * 0.012))
+      .fill({ color: COLOR_SHELF, alpha: 0.75 });
+    for (const { sprite, decor } of decorSprites) {
+      const size = h * 0.11 * decor.scale;
+      sprite.width = size;
+      sprite.height = size;
+      sprite.position.set(decor.xFraction * w, shelfY + 1);
+    }
+  };
+
+  // --- Large rune circle inscribed on the arena floor ------------------------------------
+  // Two concentric rings, four inscribed spokes, and the five element runes spaced around
+  // it — the engraved seal the fight happens on top of. All gold at low alpha.
+  const runeCircle = new Container();
+  const runeRings = new Graphics();
+  runeCircle.addChild(runeRings);
+  const runeSprites = (["fire", "water", "earth", "metal", "spirit"] as const).map((icon, i) => {
+    const sprite = new Sprite(Texture.EMPTY);
+    sprite.anchor.set(0.5);
+    sprite.alpha = 0.22;
+    const angle = -Math.PI / 2 + (i / 5) * Math.PI * 2;
+    void loadIconTexture(icon, COLOR_RUNE, 96).then((texture) => {
+      sprite.texture = texture;
+    });
+    runeCircle.addChild(sprite);
+    return { sprite, angle };
+  });
+  backdrop.addChild(runeCircle);
+  let lastRuneR = 0;
+
+  // --- Edge vignette (baked radial texture) ---------------------------------------------
+  const vignette = new Sprite(buildVignetteTexture());
+  vignette.anchor.set(0.5);
+  backdrop.addChild(vignette);
+
   sceneRoot.addChild(backdrop);
 
   // --- Arena floor: a soft candle-lit patch under the fighters --------------------------
@@ -361,10 +477,48 @@ export function mountBattleScene(stage: Container, deps: BattleSceneDeps): () =>
       prop.container.position.set(rect.left + prop.xFraction * w, groundY + h * 0.02);
       prop.container.scale.set(propScale);
       // Candle flicker: small independent oscillations on flame size + halo strength.
-      const flicker = Math.sin(now / 130 + prop.flickerPhase) * 0.5 + Math.sin(now / 47 + prop.flickerPhase * 3) * 0.5;
+      const flicker =
+        Math.sin(now / 130 + prop.flickerPhase) * 0.5 +
+        Math.sin(now / 47 + prop.flickerPhase * 3) * 0.5;
       prop.flame.scale.set(0.09 + flicker * 0.012, 0.14 + flicker * 0.02);
       prop.halo.alpha = 0.1 + (flicker + 1) * 0.03;
     }
+
+    // Far scenery (arches + shelf) tracks the anchor; geometry only rebuilt on resize.
+    farLayer.position.set(rect.left, rect.top);
+    layoutFarLayer(w, h);
+
+    // Rune circle inscribed on the floor under the arena.
+    runeCircle.position.set(centerX, groundY + h * 0.06);
+    const runeR = Math.min(w * 0.42, h * 0.46);
+    if (Math.abs(runeR - lastRuneR) >= 1) {
+      lastRuneR = runeR;
+      runeRings.clear();
+      runeRings
+        .ellipse(0, 0, runeR, runeR * 0.32)
+        .stroke({ width: 1.5, color: COLOR_RUNE, alpha: 0.22 });
+      runeRings
+        .ellipse(0, 0, runeR * 0.66, runeR * 0.21)
+        .stroke({ width: 1, color: COLOR_RUNE, alpha: 0.16 });
+      for (let i = 0; i < 4; i++) {
+        const a = (i / 4) * Math.PI;
+        runeRings
+          .moveTo(Math.cos(a) * runeR, Math.sin(a) * runeR * 0.32)
+          .lineTo(-Math.cos(a) * runeR, -Math.sin(a) * runeR * 0.32)
+          .stroke({ width: 1, color: COLOR_RUNE, alpha: 0.1 });
+      }
+      for (const { sprite, angle } of runeSprites) {
+        const size = h * 0.05;
+        sprite.width = size;
+        sprite.height = size;
+        sprite.position.set(Math.cos(angle) * runeR * 0.83, Math.sin(angle) * runeR * 0.32 * 0.83);
+      }
+    }
+
+    // Edge vignette over the whole anchor (transparent center keeps fighters bright).
+    vignette.position.set(centerX, rect.top + h / 2);
+    vignette.width = w;
+    vignette.height = h;
 
     // Floor spans most of the anchor width.
     floor.position.set(centerX, groundY + h * 0.06);
@@ -508,12 +662,12 @@ export function mountBattleScene(stage: Container, deps: BattleSceneDeps): () =>
         embers.splice(i, 1);
         continue;
       }
-      const x = rect.left + ember.xFraction * w + Math.sin(now / 700 + ember.xFraction * 20) * ember.sway;
+      const x =
+        rect.left + ember.xFraction * w + Math.sin(now / 700 + ember.xFraction * 20) * ember.sway;
       const y = groundY + h * 0.08 - life * h * 0.5;
       ember.graphic.position.set(x, y);
       ember.graphic.scale.set(ember.size);
-      ember.graphic.alpha =
-        life < 0.15 ? (life / 0.15) * 0.55 : 0.55 * (1 - phaseT(life, 0.15, 1));
+      ember.graphic.alpha = life < 0.15 ? (life / 0.15) * 0.55 : 0.55 * (1 - phaseT(life, 0.15, 1));
     }
   };
 
