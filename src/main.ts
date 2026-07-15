@@ -1,3 +1,8 @@
+// Self-hosted OFL fonts (design doc §8) — must load before the token sheet references them.
+import "@fontsource/im-fell-english-sc";
+import "@fontsource/eb-garamond/400.css";
+import "@fontsource/eb-garamond/600.css";
+import "@fontsource/eb-garamond/700.css";
 import "./styles/grimoire.css";
 import { createInitialSave } from "./core/save";
 import { createRng } from "./core/rng";

@@ -1,10 +1,11 @@
-import { Container, Graphics, type Text } from "pixi.js";
+import { AnimatedSprite, Container, Graphics, type Text } from "pixi.js";
 import { createAnimationTokenGuard } from "../lib/animation-token";
 import { stages } from "../data";
 import { foeGlyphFor } from "../data/glyphs";
 import type { EventBus, GameEventMap } from "../store/events";
 import type { GameState } from "../store/game-state";
 import type { Store } from "../store/store";
+import { loadSlashFrames } from "./fx-textures";
 import { createGlyphText, updateGlyphText } from "./glyph-text";
 import type { RenderTicker } from "./pixi-app";
 
@@ -17,15 +18,17 @@ export interface BattleSceneDeps {
   anchor: HTMLElement;
 }
 
-/* Bright cartoon "Forge" palette (mirrors src/styles/grimoire.css tokens): a saturated
- * grass field with a brown battle lane, warm sparkles, and blue/red combatant rings. */
-const COLOR_SPARK = 0xffd85e; // drifting motes / sun sparkle
-const COLOR_GRASS = 0x6cbf43; // field + foliage
-const COLOR_INK = 0xf2e9d8; // fighter glyph label (emoji keep their own colors)
-const COLOR_DANGER = 0xe5533c; // foe ring + clash tint
-const COLOR_HERO = 0x2f8bef; // hero ring (candy blue)
-const COLOR_DIRT = 0x9c6b3f; // battle lane + tree trunks / rocks
-const COLOR_DIRT_DARK = 0x7d5330;
+/* Dark "Grimoire" palette (mirrors src/styles/grimoire.css tokens): a candle-lit ritual
+ * floor with a warm battle lane, gold ember motes, and emerald/carmine combatant runes. */
+const COLOR_SPARK = 0xe8b54a; // drifting embers / candle motes (--color-gold)
+const COLOR_GROUND = 0x241a12; // ritual floor (--color-field)
+const COLOR_GROUND_NEAR = 0x16100b; // darker foreground strip (--color-field-dark)
+const COLOR_INK = 0xede4cf; // fighter glyph label + clash flash (--color-ink)
+const COLOR_DANGER = 0xc94433; // foe rune + clash tint (--color-danger)
+const COLOR_HERO = 0x3fa372; // hero rune (--color-success emerald)
+const COLOR_GOLD = 0xc9a227; // engraved gold accents (--color-primary)
+const COLOR_LANE = 0x2e2117; // trodden battle lane
+const COLOR_LANE_LIGHT = 0x3a2c1c; // trodden-patch mist under the fighters
 const COLOR_WHITE = 0xffffff;
 const COLOR_SHADOW = 0x000000;
 
@@ -51,15 +54,6 @@ function easeInOut(t: number): number {
 
 function phaseT(t: number, from: number, to: number): number {
   return Math.max(0, Math.min(1, (t - from) / (to - from)));
-}
-
-/** Multiplies each RGB channel by `factor` — the Pixi stand-in for Three's
- * `Color.multiplyScalar`, used to darken a base color for a foreground/foliage variant. */
-function darken(color: number, factor: number): number {
-  const r = Math.round(((color >> 16) & 0xff) * factor);
-  const g = Math.round(((color >> 8) & 0xff) * factor);
-  const b = Math.round((color & 0xff) * factor);
-  return (r << 16) | (g << 8) | b;
 }
 
 function flatRect(color: number, alpha = 1): Graphics {
@@ -132,9 +126,9 @@ interface Ember {
 }
 
 /**
- * The autobattler arena — the game's persistent top scene, in the bright cartoon "Forge"
- * visual language: a grass meadow with a brown battle lane, marker circles under the
- * fighters, sun-mote sparkles drifting up, and glyph fighters. Fights resolve in the store
+ * The autobattler arena — the game's persistent top scene, in the dark "Grimoire" visual
+ * language: a candle-lit ritual floor with a trodden battle lane, rune circles under the
+ * fighters, gold ember motes drifting up, and glyph fighters. Fights resolve in the store
  * on the auto-battle timer (`main.ts`); this scene only replays `battle:won`/`battle:lost`
  * outcomes it hears on the event bus, never rolls anything itself.
  */
@@ -143,77 +137,79 @@ export function mountBattleScene(stage: Container, deps: BattleSceneDeps): () =>
 
   const sceneRoot = new Container();
 
-  // --- Background scenery: a bright top-down meadow with a battle lane -----------------
-  // The reference's outdoor field, in our flat-shape language: a full grass plane, a
-  // slightly darker foreground strip for depth, a brown dirt lane the fighters stand on,
-  // and silhouette tree/rock props. Built first so they paint behind the floor/fighters
-  // (Pixi containers paint in child-insertion order — no `renderOrder` needed).
+  // --- Background scenery: a candle-lit ritual floor with a battle lane -----------------
+  // The dark tome look in our flat-shape language: a near-black warm floor plane, an even
+  // darker foreground strip for depth, a trodden lane the fighters stand on (edged with
+  // faint engraved gold), and small candle props framing it. Built first so they paint
+  // behind the floor/fighters (Pixi containers paint in child-insertion order).
   const backdrop = new Container();
-  const grassField = flatRect(COLOR_GRASS);
-  backdrop.addChild(grassField);
+  const groundField = flatRect(COLOR_GROUND);
+  backdrop.addChild(groundField);
 
-  // Darker grass strip along the very bottom = a hint of foreground depth.
-  const grassNear = flatRect(darken(COLOR_GRASS, 0.82));
-  backdrop.addChild(grassNear);
+  // Darker strip along the very bottom = a hint of foreground depth.
+  const groundNear = flatRect(COLOR_GROUND_NEAR);
+  backdrop.addChild(groundNear);
 
-  // Brown battle lane across the middle — where the two fighters meet.
-  const lane = flatRect(COLOR_DIRT);
-  backdrop.addChild(lane);
+  // Trodden battle lane across the middle — where the two fighters meet — with faint gold
+  // hairlines along both edges (the "engraved" accent of the style).
+  const lane = flatRect(COLOR_LANE);
+  const laneEdgeTop = flatRect(COLOR_GOLD, 0.28);
+  const laneEdgeBottom = flatRect(COLOR_GOLD, 0.18);
+  backdrop.addChild(lane, laneEdgeTop, laneEdgeBottom);
 
-  const buildTreeProp = (): Container => {
-    const group = new Container();
-    const trunk = flatRect(COLOR_DIRT, 0.95);
-    trunk.scale.set(0.1, 0.45);
-    trunk.position.set(0, -0.22); // up from the base (y-down world, so negative = up)
-    const foliage = flatCircle(darken(COLOR_GRASS, 0.88)); // a touch darker than the field so it reads
-    foliage.scale.set(0.42, 0.42);
-    foliage.position.set(0, -0.55);
-    group.addChild(trunk, foliage);
-    return group;
-  };
-
-  const buildRockProp = (): Container => {
-    const group = new Container();
-    const rock = flatCircle(0x9aa3ad, 0.95);
-    rock.scale.set(0.45, 0.28);
-    rock.position.set(0, -0.14);
-    group.addChild(rock);
-    return group;
-  };
-
-  interface BackdropProp {
+  // Candle prop: a wax stub + halo + flame spark. Sized ~a tenth of the scene height —
+  // discreet framing, unlike the old blob-scale tree/rock props.
+  interface CandleProp {
     readonly container: Container;
+    readonly halo: Graphics;
+    readonly flame: Graphics;
     readonly xFraction: number;
     readonly scale: number;
+    readonly flickerPhase: number;
   }
-  const backdropProps: BackdropProp[] = [
-    { container: buildTreeProp(), xFraction: 0.1, scale: 1 },
-    { container: buildTreeProp(), xFraction: 0.9, scale: 1.15 },
-    { container: buildRockProp(), xFraction: 0.72, scale: 0.9 },
+  const buildCandleProp = (xFraction: number, scale: number, flickerPhase: number): CandleProp => {
+    const group = new Container();
+    const halo = flatCircle(COLOR_SPARK, 0.12);
+    halo.scale.set(0.9);
+    halo.position.set(0, -0.72);
+    const wax = flatRect(0x8a7a5e, 0.9);
+    wax.scale.set(0.22, 0.55);
+    wax.position.set(0, -0.28); // up from the base (y-down world, so negative = up)
+    const flame = flatCircle(COLOR_SPARK, 0.95);
+    flame.scale.set(0.09, 0.14);
+    flame.position.set(0, -0.62);
+    group.addChild(halo, wax, flame);
+    return { container: group, halo, flame, xFraction, scale, flickerPhase };
+  };
+
+  const candleProps: CandleProp[] = [
+    buildCandleProp(0.07, 1, 0),
+    buildCandleProp(0.93, 1.1, 2.1),
   ];
-  for (const prop of backdropProps) backdrop.addChild(prop.container);
+  for (const prop of candleProps) backdrop.addChild(prop.container);
   sceneRoot.addChild(backdrop);
 
-  // --- Arena floor: a soft trodden patch under the fighters ----------------------------
+  // --- Arena floor: a soft candle-lit patch under the fighters --------------------------
   const floor = new Container();
-  const floorShadow = buildEllipse(floor, 1, 0.3, COLOR_SHADOW, 0.16);
-  const floorBase = buildEllipse(floor, 0.9, 0.26, COLOR_DIRT_DARK, 0.4);
-  const floorBaseEdge = buildEllipse(floor, 0.9, 0.26, COLOR_WHITE, 0.06, { innerFraction: 0.95 });
-  const floorMist = buildEllipse(floor, 0.6, 0.16, COLOR_DIRT, 0.18);
+  const floorShadow = buildEllipse(floor, 1, 0.3, COLOR_SHADOW, 0.3);
+  const floorBase = buildEllipse(floor, 0.9, 0.26, COLOR_LANE_LIGHT, 0.5);
+  const floorBaseEdge = buildEllipse(floor, 0.9, 0.26, COLOR_GOLD, 0.22, { innerFraction: 0.95 });
+  const floorMist = buildEllipse(floor, 0.6, 0.16, COLOR_SPARK, 0.12);
 
-  // --- Marker circles under each fighter ------------------------------------------------
+  // --- Rune circles under each fighter ---------------------------------------------------
+  // On the dark floor these are the scene's main color accent — alphas run high.
   const heroCircleGroup = new Container();
-  const heroCircleOuter = buildEllipse(heroCircleGroup, 1, 0.3, COLOR_HERO, 0.55, {
+  const heroCircleOuter = buildEllipse(heroCircleGroup, 1, 0.3, COLOR_HERO, 0.85, {
     innerFraction: 0.9,
   });
-  const heroCircleInner = buildEllipse(heroCircleGroup, 0.72, 0.216, COLOR_HERO, 0.32, {
+  const heroCircleInner = buildEllipse(heroCircleGroup, 0.72, 0.216, COLOR_HERO, 0.45, {
     innerFraction: 0.94,
   });
   const foeCircleGroup = new Container();
-  const foeCircleOuter = buildEllipse(foeCircleGroup, 1, 0.3, COLOR_DANGER, 0.5, {
+  const foeCircleOuter = buildEllipse(foeCircleGroup, 1, 0.3, COLOR_DANGER, 0.8, {
     innerFraction: 0.9,
   });
-  const foeCircleInner = buildEllipse(foeCircleGroup, 0.72, 0.216, COLOR_DANGER, 0.3, {
+  const foeCircleInner = buildEllipse(foeCircleGroup, 0.72, 0.216, COLOR_DANGER, 0.42, {
     innerFraction: 0.94,
   });
 
@@ -227,6 +223,32 @@ export function mountBattleScene(stage: Container, deps: BattleSceneDeps): () =>
 
   sceneRoot.addChild(floor, heroCircleGroup, foeCircleGroup, clashFlash, hero.text, foe.text);
   stage.addChild(sceneRoot);
+
+  // --- Slash FX sprites (craftpix pack, loaded lazily via fx-textures.ts) ----------------
+  // Kicked off at mount, resolved whenever the PNGs arrive; until then the clash phase
+  // falls back to the plain flash circle alone. Added after the fighters so the slash
+  // draws over them.
+  const slashSprites: Record<"win" | "lose", AnimatedSprite | null> = { win: null, lose: null };
+  let disposed = false;
+  for (const kind of ["win", "lose"] as const) {
+    loadSlashFrames(kind)
+      .then((frames) => {
+        if (disposed) return;
+        const sprite = new AnimatedSprite(frames);
+        sprite.anchor.set(0.5);
+        sprite.loop = false;
+        sprite.visible = false;
+        sprite.animationSpeed = 0.45; // ~10 frames over ~370ms at 60fps — spans the clash
+        sprite.onComplete = () => {
+          sprite.visible = false;
+        };
+        sceneRoot.addChild(sprite);
+        slashSprites[kind] = sprite;
+      })
+      .catch((error: unknown) => {
+        console.error("battle-scene: slash FX failed to load", error);
+      });
+  }
 
   // --- Ambient embers --------------------------------------------------------------------
   const emberLayer = new Container();
@@ -260,11 +282,14 @@ export function mountBattleScene(stage: Container, deps: BattleSceneDeps): () =>
   const glyphForStage = (stageId: number): string =>
     stages.some((stage) => stage.id === stageId) ? foeGlyphFor(stageId) : TROPHY_GLYPH;
 
+  let slashTriggered = false;
+
   const startFight = (won: boolean): void => {
     fightToken = tokenGuard.next();
     fightStartMs = performance.now();
     fightWon = won;
     clashFlash.visible = false;
+    slashTriggered = false;
   };
 
   const unsubscribeWon = events.on("battle:won", () => {
@@ -318,18 +343,27 @@ export function mountBattleScene(stage: Container, deps: BattleSceneDeps): () =>
     const groundY = rect.top + h * 0.68;
     const fighterScale = Math.min(h * 0.0042, 1.35);
 
-    // Meadow: a full grass plane, a darker foreground strip, and the dirt battle lane the
-    // fighters stand on; then silhouette props rooted near the horizon.
-    grassField.position.set(centerX, rect.top + h * 0.5);
-    grassField.scale.set(w, h);
-    grassNear.position.set(centerX, rect.top + h * 0.92);
-    grassNear.scale.set(w, h * 0.18);
+    // Ritual floor: a full dark plane, a darker foreground strip, and the trodden lane the
+    // fighters stand on (gold hairlines along its edges); then candle props framing it.
+    groundField.position.set(centerX, rect.top + h * 0.5);
+    groundField.scale.set(w, h);
+    groundNear.position.set(centerX, rect.top + h * 0.92);
+    groundNear.scale.set(w, h * 0.18);
+    const laneH = h * 0.22;
     lane.position.set(centerX, groundY);
-    lane.scale.set(w, h * 0.22);
-    for (const prop of backdropProps) {
-      const propScale = h * 0.46 * prop.scale;
-      prop.container.position.set(rect.left + prop.xFraction * w, groundY - h * 0.04);
+    lane.scale.set(w, laneH);
+    laneEdgeTop.position.set(centerX, groundY - laneH / 2);
+    laneEdgeTop.scale.set(w, 1.5);
+    laneEdgeBottom.position.set(centerX, groundY + laneH / 2);
+    laneEdgeBottom.scale.set(w, 1.5);
+    for (const prop of candleProps) {
+      const propScale = h * 0.12 * prop.scale;
+      prop.container.position.set(rect.left + prop.xFraction * w, groundY + h * 0.02);
       prop.container.scale.set(propScale);
+      // Candle flicker: small independent oscillations on flame size + halo strength.
+      const flicker = Math.sin(now / 130 + prop.flickerPhase) * 0.5 + Math.sin(now / 47 + prop.flickerPhase * 3) * 0.5;
+      prop.flame.scale.set(0.09 + flicker * 0.012, 0.14 + flicker * 0.02);
+      prop.halo.alpha = 0.1 + (flicker + 1) * 0.03;
     }
 
     // Floor spans most of the anchor width.
@@ -339,7 +373,7 @@ export function mountBattleScene(stage: Container, deps: BattleSceneDeps): () =>
       layer.graphic.scale.set(layer.rx * floorScale, layer.ry * floorScale);
     }
     const mistPulse = 0.5 + 0.5 * Math.sin(now / 1700);
-    floorMist.graphic.alpha = 0.05 + mistPulse * 0.09;
+    floorMist.graphic.alpha = 0.06 + mistPulse * 0.1;
 
     // Fighter posts; approach animation moves them toward the center.
     const heroPostX = rect.left + w * 0.27;
@@ -367,6 +401,13 @@ export function mountBattleScene(stage: Container, deps: BattleSceneDeps): () =>
         clashFlash.position.set(centerX, groundY - h * 0.16);
         clashFlash.scale.set(h * 0.05 + c * h * 0.1);
         clashFlash.alpha = (1 - c) * 0.85;
+        // One slash replay per fight, fired at the moment of impact (if loaded yet).
+        const slash = slashSprites[fightWon ? "win" : "lose"];
+        if (!slashTriggered && slash) {
+          slashTriggered = true;
+          slash.visible = true;
+          slash.gotoAndPlay(0);
+        }
         shakeX = (Math.random() - 0.5) * 6 * (1 - c);
         shakeY = (Math.random() - 0.5) * 4 * (1 - c);
         if (!fightWon && c > 0.5) hero.text.tint = COLOR_DANGER;
@@ -443,6 +484,15 @@ export function mountBattleScene(stage: Container, deps: BattleSceneDeps): () =>
       foeCircleInner.ry * foeCircleScale,
     );
 
+    // A playing slash follows the clash point (and its shake) until it finishes.
+    for (const kind of ["win", "lose"] as const) {
+      const slash = slashSprites[kind];
+      if (slash?.visible) {
+        slash.position.set(centerX + shakeX, groundY - h * 0.16 + shakeY);
+        slash.scale.set((h * 0.55) / 500); // frames are 500×500 art
+      }
+    }
+
     // Embers drift up across the arena.
     if (now - lastEmberAt > EMBER_SPAWN_INTERVAL_MS) {
       lastEmberAt = now;
@@ -475,6 +525,7 @@ export function mountBattleScene(stage: Container, deps: BattleSceneDeps): () =>
   ticker.add(tickWithDelta);
 
   return () => {
+    disposed = true;
     ticker.remove(tickWithDelta);
     unsubscribeWon();
     unsubscribeLost();

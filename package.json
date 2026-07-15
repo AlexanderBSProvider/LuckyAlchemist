@@ -30,6 +30,8 @@
     "vitest": "^4.1.10"
   },
   "dependencies": {
+    "@fontsource/eb-garamond": "^5.2.7",
+    "@fontsource/im-fell-english-sc": "^5.2.6",
     "pixi.js": "^8.19.0",
     "zod": "^3.24.1"
   }

@@ -1,9 +1,9 @@
 /*
- * Stage 1 game screen, dark cartoon "Forge" style: portrait layout — a saturated battle
- * scene up top (Three.js grass field with a hero medallion + coin HUD floating over it),
- * then a dark charcoal deck below: tab bar and action panels (brew cauldron, equipment/
- * mutation grid, laboratory) with one chunky candy-colored CTA each. All colors, spacing,
- * radii, and fonts come from the tokens in styles/grimoire.css.
+ * Stage 1 game screen, dark "Grimoire" style: portrait layout — a candle-lit ritual arena
+ * up top (Pixi dark floor with a hero medallion + coin HUD floating over it), then the
+ * tome deck below: tab bar and action panels (brew cauldron, equipment/mutation grid,
+ * laboratory) with one engraved gold/emerald CTA each. All colors, spacing, radii, and
+ * fonts come from the tokens in styles/grimoire.css.
  */
 
 .lab-panel {
@@ -59,8 +59,8 @@
   pointer-events: auto;
 }
 
-/* Hero medallion: square portrait + name + a slim "XP"-style power bar, like the reference's
- * avatar/level block. White pill with a soft lift so it reads over the grass. */
+/* Hero medallion: square portrait + name + a slim "XP"-style power bar. Dark leather pill
+ * with a gold rim so it reads over the dark arena. */
 .hero-badge {
   display: flex;
   align-items: center;
@@ -68,7 +68,7 @@
   min-width: 0;
   padding: 4px var(--space-3) 4px 4px;
   background: var(--color-surface);
-  border: 2px solid #ffffff;
+  border: 2px solid var(--color-primary-dark);
   border-radius: var(--radius-pill);
   box-shadow: var(--shadow-card);
 }
@@ -81,9 +81,9 @@
   place-items: center;
   font-size: 1.15rem;
   border-radius: 50%;
-  background: linear-gradient(160deg, #eaf1fb, #cfe0f6);
-  border: 2px solid #ffffff;
-  box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.9);
+  background: radial-gradient(circle at 35% 30%, var(--color-surface-2), var(--color-sunken));
+  border: 2px solid var(--color-primary);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.6);
 }
 
 .hero-badge__meta {
@@ -121,13 +121,13 @@
   flex: none;
 }
 
-/* Coin / ash chips: white pill with a colored leading edge, tabular digits. */
+/* Coin / ash chips: dark leather pill with a gold rim, tabular digits. */
 .hud__res {
   display: inline-flex;
   align-items: center;
   padding: 3px var(--space-3);
   background: var(--color-surface);
-  border: 2px solid #ffffff;
+  border: 2px solid var(--color-primary-dark);
   border-radius: var(--radius-pill);
   font-family: var(--font-display);
   font-weight: 700;
@@ -163,22 +163,22 @@
 
 /* --- Battle scene (top, always visible) ---------------------------------------------- */
 
-/* No opaque fill (unlike `.panel`) — `render/three-app.ts` mounts its canvas as a fixed
+/* No opaque fill (unlike `.panel`) — `render/pixi-app.ts` mounts its canvas as a fixed
  * background layer behind all DOM (z-index 0); an opaque `.scene` background would paint
- * over the grass field `render/battle-scene.ts` draws into `.scene__battle`. A faint sky
- * tint + inner shade give depth without occluding the canvas. */
+ * over the arena `render/battle-scene.ts` draws into `.scene__battle`. A faint candle
+ * glow + inner shade give depth without occluding the canvas. */
 .scene {
   position: relative;
   width: 100%;
   height: 100%;
   min-height: 0;
-  border: 3px solid #ffffff;
+  border: 2px solid var(--color-primary-dark);
   border-radius: var(--radius-lg);
   overflow: hidden;
-  background: linear-gradient(180deg, rgba(160, 210, 255, 0.18), rgba(108, 191, 67, 0.04) 45%);
+  background: radial-gradient(ellipse at 50% 20%, rgba(201, 162, 39, 0.08), transparent 60%);
   box-shadow:
     var(--shadow-card),
-    inset 0 -14px 24px rgba(20, 60, 20, 0.12);
+    inset 0 -14px 24px rgba(0, 0, 0, 0.3);
 }
 
 /* Empty anchor box — `render/battle-scene.ts` draws the arena into this element's screen
@@ -204,10 +204,10 @@
 .scene__stage {
   margin: 0;
   font-family: var(--font-display);
-  font-weight: 700;
+  font-weight: 400;
   font-size: 1.1rem;
-  letter-spacing: 0.02em;
-  color: #ffffff;
+  letter-spacing: 0.04em;
+  color: var(--color-ink);
   text-shadow: var(--scene-text-shadow);
 }
 
@@ -218,24 +218,37 @@
   right: var(--space-3);
   display: flex;
   flex-direction: column;
+  align-items: flex-start;
   gap: 5px;
   pointer-events: none;
 }
 
-.scene__chance {
+/* Power/reward captions sit on the arena canvas — each gets its own dark pill backing
+ * instead of bare text-shadow'd type floating over the scene. */
+.scene__chance,
+.scene__reward {
   margin: 0;
+  padding: 2px var(--space-2);
+  background: rgba(11, 9, 7, 0.72);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-pill);
+}
+
+.scene__chance {
   font-weight: 700;
   font-size: 0.82rem;
-  color: #ffffff;
-  text-shadow: var(--scene-text-shadow);
+  color: var(--color-ink);
 }
 
 .scene__reward {
-  margin: 0;
   font-size: 0.78rem;
   font-weight: 600;
-  color: #f4f8ff;
-  text-shadow: var(--scene-text-shadow);
+  color: var(--color-ink-dim);
+}
+
+/* The win-chance meter spans the lane; keep it full-width inside the left-aligned foot. */
+.scene__foot > .meter {
+  align-self: stretch;
 }
 
 .scene__result {
@@ -249,11 +262,11 @@
 .scene__result-text {
   margin: 0;
   font-family: var(--font-display);
-  font-weight: 700;
+  font-weight: 400;
   font-size: 1.15rem;
-  color: #ffffff;
+  color: var(--color-ink-inverse);
   background: linear-gradient(180deg, var(--color-gold), var(--color-gold-dark));
-  border: 2px solid #ffffff;
+  border: 2px solid var(--color-primary-dark);
   padding: var(--space-2) var(--space-4);
   border-radius: var(--radius-pill);
   box-shadow: var(--shadow-card);
@@ -484,9 +497,9 @@
   font-weight: 600;
 }
 
-/* Hints that overlay the transparent brew panel (over grass/cauldron) need the light halo. */
+/* Hints that overlay the transparent brew panel (over the cauldron canvas) need the halo. */
 .panel--brew .panel__hint {
-  color: #ffffff;
+  color: var(--color-ink);
   text-shadow: var(--scene-text-shadow);
 }
 
@@ -503,59 +516,61 @@
   width: 9px;
   height: 9px;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.45);
-  border: 1.5px solid rgba(255, 255, 255, 0.85);
-  box-shadow: 0 1px 2px rgba(12, 30, 12, 0.4);
+  background: rgba(237, 228, 207, 0.25);
+  border: 1.5px solid rgba(237, 228, 207, 0.55);
+  box-shadow: 0 1px 2px rgba(8, 6, 4, 0.5);
 }
 
 .stage-track__dot--cleared {
   background: var(--color-gold);
-  border-color: #ffffff;
+  border-color: var(--color-gold-dark);
 }
 
 .stage-track__dot--current {
-  background: var(--color-primary);
-  border-color: #ffffff;
+  background: var(--color-success);
+  border-color: var(--color-ink);
   transform: scale(1.25);
 }
 
-/* Big chunky CTA — the one loud element per panel (the reference's forge/collect button).
- * Green "craft" action with a solid bottom lip that presses down on tap. */
+/* Big chunky CTA — the one loud element per panel. Emerald "brew" action with a dark ink
+ * label (dark-on-emerald clears WCAG large-text 3:1, light-on-emerald would not) and a
+ * solid bottom lip that presses down on tap. Disabled reads as an unlit dark slab, so the
+ * enabled state is unmistakably "on". */
 .cta {
   flex: none;
   width: 100%;
   padding: var(--space-3);
   font-family: var(--font-display);
-  font-weight: 700;
+  font-weight: 400;
   font-size: 1.25rem;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.04em;
   color: var(--color-ink-inverse);
-  /* Deeper greens (not the light mint) so the white label clears WCAG large-text 3:1; the
-   * dark text-shadow lifts it further against the mid-tone fill. */
-  background: linear-gradient(180deg, var(--color-success), var(--color-success-dark));
-  border: 2px solid #2a7a2c;
+  background: linear-gradient(180deg, #4cb886, var(--color-success));
+  border: 2px solid var(--color-success-dark);
   border-radius: var(--radius);
-  text-shadow: 0 1px 1px rgba(0, 40, 0, 0.4);
   box-shadow:
-    0 5px 0 #2a7a2c,
-    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+    0 5px 0 var(--color-success-dark),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
 }
 
 .cta:hover:not(:disabled) {
-  filter: brightness(1.05);
+  filter: brightness(1.07);
 }
 
 .cta:active:not(:disabled) {
   transform: translateY(5px);
   box-shadow:
     0 0 0 var(--color-success-dark),
-    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
 }
 
 .cta:disabled {
-  filter: grayscale(0.5);
-  opacity: 0.55;
-  box-shadow: 0 5px 0 var(--color-success-dark);
+  color: var(--color-ink-dim);
+  background: var(--color-surface-2);
+  border-color: var(--color-line);
+  opacity: 1;
+  filter: none;
+  box-shadow: var(--shadow-inset);
 }
 
 /* --- Ingredient chips (brew recipe) ----------------------------------------------------- */
@@ -586,7 +601,9 @@
 }
 
 .chip__face {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   padding: var(--space-1) var(--space-3);
   background: var(--color-surface);
   border: 2px solid var(--color-line-strong);
@@ -596,7 +613,7 @@
   color: var(--color-ink);
   cursor: pointer;
   user-select: none;
-  box-shadow: 0 1px 2px rgba(24, 40, 66, 0.08);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
   transition:
     color 0.14s ease,
     border-color 0.14s ease,
@@ -608,7 +625,7 @@
   color: var(--color-primary);
   border-color: var(--color-primary);
   background: var(--color-primary-soft);
-  box-shadow: 0 0 0 3px rgba(61, 151, 255, 0.25);
+  box-shadow: 0 0 0 3px rgba(201, 162, 39, 0.25);
 }
 
 .chip input:focus-visible + .chip__face {
@@ -616,21 +633,37 @@
   outline-offset: 2px;
 }
 
+/* Reagent icons (craftpix vegetables pack, mapped in ingredient-icons.ts). Their thick
+ * dark outlines read well at chip size on the dark leather surfaces. */
+.chip__icon {
+  width: 20px;
+  height: 20px;
+  display: block;
+}
+
+.scene__reward-icon {
+  width: 14px;
+  height: 14px;
+  display: inline-block;
+  vertical-align: -2px;
+  margin-right: 2px;
+}
+
 /* --- Win-chance meter (battle scene overlay) --------------------------------------------- */
 
 .meter {
   height: 10px;
-  border: 2px solid rgba(255, 255, 255, 0.85);
+  border: 2px solid rgba(237, 228, 207, 0.4);
   border-radius: var(--radius-pill);
-  background: rgba(12, 30, 12, 0.35);
+  background: rgba(8, 6, 4, 0.55);
   overflow: hidden;
-  box-shadow: 0 1px 2px rgba(12, 30, 12, 0.35);
+  box-shadow: 0 1px 2px rgba(8, 6, 4, 0.5);
 }
 
 .meter__fill {
   height: 100%;
   width: 0;
-  background: linear-gradient(90deg, var(--color-success), #7be07e);
+  background: linear-gradient(90deg, var(--color-success-dark), var(--color-success));
   transition: width 0.45s ease;
 }
 

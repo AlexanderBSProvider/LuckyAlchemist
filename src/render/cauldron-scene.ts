@@ -22,14 +22,14 @@ export interface CauldronSceneDeps {
 const DESIGN_SIZE = 300;
 
 const COLOR_GOLD = 0xc9a227;
-const COLOR_INK_DIM = 0xa89a82;
+const COLOR_GLYPH = 0xede4cf; // parchment ink — engraved glyphs must read on the dark deck
 const COLOR_EMERALD = 0x3fa372;
 const COLOR_CAULDRON_EDGE = 0x14382a;
 
 const RING_CONFIGS = [
-  { insetFraction: 0, revolutionMs: 95_000, direction: 1, fontSize: 18 },
-  { insetFraction: 0.15, revolutionMs: 70_000, direction: -1, fontSize: 18 },
-  { insetFraction: 0.3, revolutionMs: 50_000, direction: 1, fontSize: 15 },
+  { insetFraction: 0, revolutionMs: 95_000, direction: 1, fontSize: 22 },
+  { insetFraction: 0.15, revolutionMs: 70_000, direction: -1, fontSize: 20 },
+  { insetFraction: 0.3, revolutionMs: 50_000, direction: 1, fontSize: 17 },
 ] as const;
 
 const BUBBLES = [
@@ -70,9 +70,10 @@ function buildRing(config: (typeof RING_CONFIGS)[number]): Ring {
   // Unit circle stroked entirely inward of radius 1 (`alignment: 1`), matching the old
   // `RingGeometry(0.97, 1, 64)` annulus exactly — the whole shape is then uniformly scaled
   // per frame in `layoutRing`, so the stroke thickness scales along with the ring radius.
+  // Alpha runs high: at 0.16 the rings all but vanished on phone screens.
   const border = new Graphics()
     .circle(0, 0, 1)
-    .stroke({ width: 0.03, color: COLOR_GOLD, alpha: 0.16, alignment: 1 });
+    .stroke({ width: 0.03, color: COLOR_GOLD, alpha: 0.5, alignment: 1 });
   container.addChild(border);
 
   const glyphs: RingGlyph[] = symbols.map((symbol, i) => {
@@ -81,7 +82,7 @@ function buildRing(config: (typeof RING_CONFIGS)[number]): Ring {
     const text = createGlyphText({
       text: glyphFor(symbol.id),
       fontSize: config.fontSize,
-      color: COLOR_INK_DIM,
+      color: COLOR_GLYPH,
     });
     text.anchor.set(0.5, 0.5);
     container.addChild(text);
@@ -145,13 +146,17 @@ export function mountCauldronScene(stage: Container, deps: CauldronSceneDeps): (
   const { events, ticker, anchor } = deps;
 
   const sceneRoot = new Container();
+  // Soft emerald backglow behind the whole ring stack — lifts the cauldron block off the
+  // near-black deck so it reads as the tab's hero prop instead of vanishing into it.
+  const backGlow = new Graphics().circle(0, 0, 1).fill({ color: COLOR_EMERALD });
+  backGlow.alpha = 0.08;
   const ringsGroup = new Container();
   const rings = RING_CONFIGS.map(buildRing);
   for (const ring of rings) ringsGroup.addChild(ring.container);
   const cauldron = buildCauldron();
   const bubbles = buildBubbles(cauldron);
 
-  sceneRoot.addChild(ringsGroup, cauldron.container);
+  sceneRoot.addChild(backGlow, ringsGroup, cauldron.container);
   stage.addChild(sceneRoot);
 
   const sparks: Spark[] = [];
@@ -219,6 +224,8 @@ export function mountCauldronScene(stage: Container, deps: CauldronSceneDeps): (
     const nowMs = performance.now();
     const pulse = 0.5 + 0.5 * Math.sin(nowMs / 2000);
     cauldron.glow.alpha = 0.2 + pulse * 0.35;
+    backGlow.scale.set(boxSize * 0.55);
+    backGlow.alpha = 0.06 + pulse * 0.05;
 
     for (const bubble of bubbles) {
       const phase = ((nowMs + bubble.config.delayMs) % BUBBLE_LOOP_MS) / BUBBLE_LOOP_MS;

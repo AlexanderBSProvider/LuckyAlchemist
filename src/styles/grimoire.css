@@ -1,46 +1,50 @@
 /*
- * "Forge" style system — dark cartoon idle-RPG look (see docs/GAME-DESIGN.md §8).
- * Dark charcoal-navy deck, saturated grass field, chunky rounded type, bold candy-colored
- * buttons. Every color/spacing/font value used anywhere in the UI should reference one of
- * these custom properties, not a literal — that is what keeps the whole game visually
- * consistent as more screens are added, and a single-block theme swap (light↔dark).
+ * "Grimoire" style system — dark alchemical tome look (docs/GAME-DESIGN.md §8).
+ * Near-black warm deck, engraved gold/emerald/purple accents, parchment ink, serif
+ * small-caps display type. Every color/spacing/font value used anywhere in the UI should
+ * reference one of these custom properties, not a literal — that is what keeps the whole
+ * game visually consistent as more screens are added, and a single-block theme swap.
  *
- * (File is still named grimoire.css for the stable import path in index.html; the visual
- * language it carries is the cartoon "Forge" theme.)
+ * Fonts are self-hosted via @fontsource packages (OFL license), imported in main.ts —
+ * no external font requests (portal CSP + offline-friendly).
  */
 
 :root {
-  /* Palette — surfaces (dark deck) */
-  --color-bg: #171922; /* app + deck background: deep charcoal-navy */
-  --color-surface: #262b38; /* cards, cells, chips */
-  --color-surface-2: #2f3542; /* subtly raised rows */
-  --color-sunken: #12141b; /* empty slot wells, meter tracks */
-  --color-line: #363c4a; /* hairline borders between dark surfaces */
-  --color-line-strong: #4a5162;
+  /* Palette — surfaces (dark tome deck, warm near-black, never navy) */
+  --color-bg: #100d0a; /* app + deck background (design doc §8 base) */
+  --color-surface: #1e1712; /* cards, cells, chips: dark leather */
+  --color-surface-2: #282017; /* subtly raised rows */
+  --color-sunken: #0b0907; /* empty slot wells, meter tracks */
+  --color-line: #3a2f21; /* hairline borders between dark surfaces */
+  --color-line-strong: #55452e;
 
-  /* Palette — ink */
-  --color-ink: #eef1f7; /* primary text on dark surfaces */
-  --color-ink-dim: #98a2b6; /* secondary text */
-  --color-ink-inverse: #ffffff; /* text on colored buttons */
+  /* Palette — ink (parchment on leather) */
+  --color-ink: #ede4cf; /* primary text on dark surfaces */
+  --color-ink-dim: #a89a82; /* secondary text */
+  --color-ink-inverse: #14100a; /* text on gold-faced buttons */
 
-  /* Palette — brand / accents (slightly brightened to sing on a dark deck) */
-  --color-primary: #3d97ff; /* candy blue (equipped/primary, the reference's INSTALL) */
-  --color-primary-dark: #1f6ad0; /* chunky-button bottom edge + pressed */
-  --color-primary-soft: #22344d; /* dark-tinted fill behind selected/equipped */
-  --color-success: #4cbe4f; /* forge/brew green */
-  --color-success-dark: #2f8f34;
-  --color-gold: #ffc23c; /* coins */
-  --color-gold-dark: #d1900f;
-  --color-danger: #ef5a41;
-  --color-danger-dark: #c23c28;
+  /* Palette — brand / accents (design doc §8: gold / emerald / purple) */
+  --color-primary: #c9a227; /* engraved gold (selected/primary) */
+  --color-primary-dark: #8f7119; /* chunky-button bottom edge + pressed */
+  --color-primary-soft: #2b2310; /* dark gold-tinted fill behind selected/equipped */
+  --color-success: #3fa372; /* emerald (brew/win) */
+  --color-success-dark: #2b7250;
+  --color-gold: #e8b54a; /* coins (brighter than the engraved primary gold) */
+  --color-gold-dark: #a87e1c;
+  --color-danger: #c94433; /* muted carmine */
+  --color-danger-dark: #93291c;
+  --color-arcane: #6e4b8e; /* purple accent (mystic/epic touches) */
+  --color-arcane-dark: #4e3465;
 
-  /* Field tint (mirrors the Three.js battle scene grass, for DOM fallbacks) */
-  --color-field: #6cbf43;
-  --color-field-dark: #4f9e30;
+  /* Arena ground tint (mirrors render/battle-scene.ts's dark ritual floor, for DOM
+   * fallbacks) */
+  --color-field: #241a12;
+  --color-field-dark: #16100b;
 
-  /* Typography */
-  --font-display: "Fredoka", "Nunito", system-ui, sans-serif;
-  --font-body: "Nunito", system-ui, sans-serif;
+  /* Typography — IM Fell English SC ships only weight 400; heavier display weights are
+   * browser-synthesized, which suits the rough engraved look. */
+  --font-display: "IM Fell English SC", "EB Garamond", Georgia, serif;
+  --font-body: "EB Garamond", Georgia, serif;
 
   /* Spacing scale (4/8 rhythm) */
   --space-1: 0.25rem;
@@ -51,20 +55,20 @@
 
   /* Rarity tiers: --rarity-<tier> custom properties are stamped onto :root at bootstrap
    * by main.ts from src/data/rarity-visuals.ts — the canonical source shared with the
-   * Three.js renderer. Do not hardcode rarity colors here. */
+   * Pixi renderer. Do not hardcode rarity colors here. */
 
-  /* Effects — cartoon: rounded corners, soft ambient shadow, chunky "3D" button lips. */
-  --radius: 12px;
-  --radius-lg: 18px;
+  /* Effects — engraved: rounded corners kept modest, deep ambient shadow, gold edges. */
+  --radius: 10px;
+  --radius-lg: 16px;
   --radius-pill: 999px;
   --border-subtle: 1px solid var(--color-line);
-  /* Card lift: a soft ambient drop that reads as depth on the dark deck. */
+  /* Card lift: a soft ambient drop that reads as depth on the near-black deck. */
   --shadow-card:
-    0 1px 2px rgba(0, 0, 0, 0.3),
-    0 6px 16px rgba(0, 0, 0, 0.38);
-  --shadow-inset: inset 0 2px 4px rgba(0, 0, 0, 0.42);
-  /* Overlay text over the bright scene needs a dark halo to stay legible on grass. */
-  --scene-text-shadow: 0 2px 6px rgba(12, 30, 12, 0.6);
+    0 1px 2px rgba(0, 0, 0, 0.4),
+    0 6px 16px rgba(0, 0, 0, 0.5);
+  --shadow-inset: inset 0 2px 4px rgba(0, 0, 0, 0.55);
+  /* Overlay text over the arena needs a dark halo to stay legible over glow/embers. */
+  --scene-text-shadow: 0 2px 6px rgba(8, 6, 4, 0.75);
 }
 
 * {
@@ -86,15 +90,15 @@ body {
  * propagation rule, a non-transparent `html` background becomes the viewport's true
  * bottom layer, painted *below* every positioned element regardless of z-index. If
  * `body` also painted an opaque color, it would sit in the normal in-flow paint step —
- * *above* `render/three-app.ts`'s fixed, z-index:0 canvas — and hide it completely. */
+ * *above* `render/pixi-app.ts`'s fixed, z-index:0 canvas — and hide it completely. */
 html {
   background: var(--color-bg);
 }
 
-/* Faint top glow so the deck feels lit, not flat. Translucent, so it layers over the
- * Three.js canvas without hiding it. */
+/* Faint arcane top glow so the tome feels candle-lit, not flat. Translucent, so it layers
+ * over the Pixi canvas without hiding it. */
 body {
-  background-image: radial-gradient(ellipse at 50% 0%, rgba(47, 139, 239, 0.06), transparent 55%);
+  background-image: radial-gradient(ellipse at 50% 0%, rgba(110, 75, 142, 0.09), transparent 55%);
 }
 
 /* Portrait game frame (mobile-first, web-portal format): one centered column that fills the
@@ -102,7 +106,7 @@ body {
  * document. `dvh` tracks the *dynamic* viewport so mobile browser chrome sliding in/out
  * doesn't clip the deck; `vh` is the fallback for engines without it. */
 #app {
-  /* Own stacking context above the Three.js canvas (render/three-app.ts mounts it fixed at
+  /* Own stacking context above the Pixi canvas (render/pixi-app.ts mounts it fixed at
    * z-index 0). This lifts the DOM UI over the scene while its transparent regions (the
    * battle `.scene`) still reveal the canvas behind. */
   position: relative;
@@ -123,18 +127,19 @@ h1,
 h2,
 h3 {
   font-family: var(--font-display);
-  font-weight: 700;
-  letter-spacing: 0.01em;
+  font-weight: 400; /* IM Fell carries weight through its letterforms, not boldness */
+  letter-spacing: 0.02em;
   color: var(--color-ink);
   margin: 0;
 }
 
-/* Base button = light rounded pill with a soft lift. Colored/chunky variants (.cta,
+/* Base button = dark leather pill with an engraved edge. Colored/chunky variants (.cta,
  * .btn-primary) layer on top. */
 button {
   font-family: var(--font-display);
-  font-weight: 600;
+  font-weight: 400;
   font-size: 0.95rem;
+  letter-spacing: 0.03em;
   color: var(--color-ink);
   background: var(--color-surface);
   border: 1px solid var(--color-line-strong);
@@ -150,7 +155,7 @@ button {
 }
 
 button:hover:not(:disabled) {
-  filter: brightness(1.03);
+  filter: brightness(1.08);
 }
 
 button:active:not(:disabled) {
@@ -170,13 +175,14 @@ button.btn-small {
   padding: var(--space-1) var(--space-3);
 }
 
-/* Solid candy-blue action, used for row-level primary buttons (equip, buy). Uses the
- * darker blue as the face (not --color-primary) so white label text clears WCAG 4.5:1. */
+/* Solid gold action, used for row-level primary buttons (equip, buy). Dark ink label on
+ * the gold face clears WCAG 4.5:1 (light text on gold would not). */
 button.btn-primary {
   color: var(--color-ink-inverse);
-  background: var(--color-primary-dark);
-  border-color: #14509f;
-  box-shadow: 0 2px 0 #14509f;
+  background: var(--color-primary);
+  border-color: var(--color-primary-dark);
+  box-shadow: 0 2px 0 var(--color-primary-dark);
+  font-weight: 600;
 }
 
 :focus-visible {
@@ -208,7 +214,7 @@ button.btn-primary {
   z-index: 0;
   pointer-events: none;
   color: transparent;
-  -webkit-text-stroke: 0.14em var(--outline-color, #1a2536);
+  -webkit-text-stroke: 0.14em var(--outline-color, #0b0806);
 }
 
 .text-holder > .text:not(.outline) {

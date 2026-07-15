@@ -20,6 +20,7 @@ import type { GameState } from "../store/game-state";
 import { playerPower } from "../store/selectors";
 import type { Store } from "../store/store";
 import { createAshScratch } from "./ash-scratch";
+import { ingredientIconEl } from "./ingredient-icons";
 
 export interface LabPanelDeps {
   store: Store<GameState>;
@@ -331,9 +332,12 @@ export function mountLabPanel(container: HTMLElement, deps: LabPanelDeps): LabPa
     stageLine.textContent = `Battle 1-${String(stage.id)}`;
     meterFill.style.width = `${String(Math.max(2, winChance))}%`;
     chanceLine.textContent = `Power ${String(power)} vs ${String(stage.difficulty)}`;
-    rewardLine.textContent =
-      `Reward: ${String(stage.rewardGold)} ☉ + ${String(stage.rewardIngredientAmount)} ` +
-      ingredientLabel(stage.rewardIngredientId);
+    rewardLine.replaceChildren(
+      `Reward: ${String(stage.rewardGold)} ☉ + ${String(stage.rewardIngredientAmount)} `,
+    );
+    const rewardIcon = ingredientIconEl(stage.rewardIngredientId, "scene__reward-icon");
+    if (rewardIcon) rewardLine.append(rewardIcon);
+    rewardLine.append(ingredientLabel(stage.rewardIngredientId));
   };
 
   let brewLocked = false;
@@ -351,7 +355,10 @@ export function mountLabPanel(container: HTMLElement, deps: LabPanelDeps): LabPa
         checkbox.type = "checkbox";
         checkbox.value = id;
         const amount = state.resources.ingredients[id] ?? 0;
-        const face = el("span", "chip__face", `${ingredientLabel(id)} ×${String(amount)}`);
+        const face = el("span", "chip__face");
+        const icon = ingredientIconEl(id, "chip__icon");
+        if (icon) face.append(icon);
+        face.append(`${ingredientLabel(id)} ×${String(amount)}`);
         chip.append(checkbox, face);
         item.append(chip);
         return item;
